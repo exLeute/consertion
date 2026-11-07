@@ -34,7 +34,7 @@ download() {
     Linux-aarch64|Linux-arm64)  target=aarch64-unknown-linux-musl ;;
     Darwin-arm64)               target=aarch64-apple-darwin ;;
     Darwin-x86_64)              target=x86_64-apple-darwin ;;
-    *) die "No prebuilt binary for $(uname -s) $(uname -m). Build it instead: cargo install --git https://github.com/$repo" ;;
+    *) die "No prebuilt binary for $(uname -s) $(uname -m). Build it instead: cargo install --locked --git https://github.com/$repo" ;;
   esac
   url="https://github.com/$repo/releases/latest/download/consertion-$target.tar.gz"
   say "Downloading $url"

@@ -29,7 +29,8 @@ for the defaults. It's a single file, with nothing else to set up.
 
 **Windows**: grab `consertion-x86_64-pc-windows-msvc.zip` from
 [Releases](https://github.com/exLeute/consertion/releases/latest), unzip, and
-run `consertion.exe` in Windows Terminal.
+run `consertion.exe` in Windows Terminal. To run it from anywhere, move it into a
+folder that's on your `PATH`.
 
 You can also download any binary from
 [Releases](https://github.com/exLeute/consertion/releases/latest) by hand. On
@@ -46,8 +47,8 @@ git clone https://github.com/exLeute/consertion && cd consertion
 Run inside a clone, `install.sh` builds from source (or reuses a binary you
 already built) instead of downloading. You can also skip it:
 `cargo build --release` leaves the binary in `target/release/consertion`, and
-`cargo install --git https://github.com/exLeute/consertion` does everything in
-one go.
+`cargo install --locked --git https://github.com/exLeute/consertion` does
+everything in one go.
 
 ## Use it
 
@@ -69,7 +70,7 @@ Or skip the app:
 ```sh
 consertion 5 mi km                  # 8.04672
 consertion 5 mi                     # 5 miles in every common length unit
-consertion 15:00 kyiv to new york   # Sat 2026-11-07 08:00 (UTC−5)
+consertion 15:00 kyiv to new york   # 08:00 (UTC−5), with the date
 consertion 100 usd eur
 consertion 1 "cup of flour" g       # 125
 consertion C#5 note Hz              # 554.365262
