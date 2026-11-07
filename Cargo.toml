@@ -1,0 +1,37 @@
+[package]
+name = "consertion"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "A fast terminal converter for units, currencies, time zones, sizes, colors, text and files"
+license = "MIT"
+repository = "https://github.com/exLeute/consertion"
+readme = "README.md"
+keywords = ["converter", "units", "tui", "cli", "currency"]
+categories = ["command-line-utilities"]
+exclude = [".github/", "install.sh"]
+
+[dependencies]
+arboard = { version = "3.7.0", features = ["wayland-data-control"] }
+csv = "1.4.0"
+dirs = "7.0.0"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "bmp", "ico", "tiff", "webp", "tga", "pnm", "qoi"] }
+jiff = "0.2.39"
+num-bigint = "0.4"
+num-integer = "0.1.47"
+num-rational = "0.4.2"
+num-traits = "0.2.19"
+pulldown-cmark = { version = "0.13.6", default-features = false, features = ["html"] }
+ratatui = "0.29"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+serde_yaml = "0.9.34"
+toml = "1.2.1"
+unicode-width = "=0.2.0"
+ureq = "2"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
