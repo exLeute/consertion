@@ -1,4 +1,4 @@
-# consertion
+# Consertion
 
 A universal converter for the terminal. Units, currencies, time zones, clothing
 and paper sizes, cooking measures, music notes, colors, number bases, text
