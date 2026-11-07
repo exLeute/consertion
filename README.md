@@ -8,6 +8,13 @@ offline, except for currency rates and translation.
 Type what you're looking for, pick a target, and type a value. Both sides are
 editable, and everything else in the same category updates below as you type.
 
+<p>
+  <img src="docs/converter.png" width="49%" alt="Search screen with the category sidebar and the list of length units">
+  <img src="docs/converter_currencies.png" width="49%" alt="17.20 US dollars converted to euros, with every other currency listed below">
+  <img src="docs/converter_files.png" width="49%" alt="Converting a PNG screenshot to JPEG with resize, quality and color options">
+  <img src="docs/converter_translate.png" width="49%" alt="Translating English to French as you type">
+</p>
+
 ## Install
 
 **Linux / macOS**

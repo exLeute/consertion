@@ -9,7 +9,7 @@ repository = "https://github.com/exLeute/consertion"
 readme = "README.md"
 keywords = ["converter", "units", "tui", "cli", "currency"]
 categories = ["command-line-utilities"]
-exclude = [".github/", "install.sh"]
+exclude = [".github/", "install.sh", "docs/"]
 
 [dependencies]
 arboard = { version = "3.7.0", features = ["wayland-data-control"] }
