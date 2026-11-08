@@ -398,6 +398,16 @@ pub fn register(b: &mut Builder) {
         b.unit(&format!("{pn}byte"), &format!("{ps}B"), kind, super::expr(&format!("8*{p}")), crate::num::int(0), "binary iec", i < 5);
         b.unit(&format!("{pn}bit"), &format!("{ps}bit"), kind, super::expr(&p), crate::num::int(0), "binary iec", i < 3);
     }
+    b.linear(&[
+        ("disk sector (512 B)", "sector", "8*512", "linux dd block size lba fdisk"),
+        ("4K sector / memory page", "4K", "8*4096", "linux page size block advanced format dd bs"),
+        ("huge page (2 MiB)", "hugepage", "8*2^21", "linux hugepages transparent"),
+        ("3.5″ floppy (1.44 MB)", "floppy", "8*1474560", "diskette"),
+        ("CD (700 MB, 80 min)", "CD", "8*737280000", "cd-r disc iso"),
+        ("DVD (4.7 GB)", "DVD", "8*4700372992", "dvd-r disc iso single layer"),
+        ("dual-layer DVD (8.5 GB)", "DVD-DL", "8*8543666176", "dvd disc"),
+        ("Blu-ray (25 GB)", "BD", "8*25025314816", "bluray bd-r disc"),
+    ]);
 
     b.category("datarate", "Data Rate", false);
     b.linear(&[
@@ -414,6 +424,9 @@ pub fn register(b: &mut Builder) {
         ("kibibyte per second", "KiB/s", "8*2^10", ""),
         ("mebibyte per second", "MiB/s", "8*2^20", ""),
         ("gibibyte per second", "GiB/s", "8*2^30", ""),
+        ("gigabyte per month", "GB/mo", "8e9*12/yr", "bandwidth traffic transfer quota hosting cloud egress vps"),
+        ("terabyte per month", "TB/mo", "8e12*12/yr", "bandwidth traffic transfer quota hosting cloud egress vps"),
+        ("gigabyte per day", "GB/day", "8e9/day", "traffic logs"),
     ]);
 
     b.category("angle", "Angle", false);
@@ -656,6 +669,173 @@ pub fn register(b: &mut Builder) {
             _ => &[],
         };
         b.linear(extras);
+        use super::parts::CodeFmt;
+        match id {
+            "voltage" => {
+                b.scale("decibel volt", "dBV", Scale::Dbv, "db voltage level audio line level consumer -10dbv");
+                b.scale("decibel unloaded (dBu)", "dBu", Scale::Dbu, "db voltage level audio pro line level +4dbu 0.775");
+                b.scale("decibel millivolt", "dBmV", Scale::DbmV, "db cable tv rf signal level");
+                b.scale("decibel microvolt", "dBµV", Scale::DbuV, "dbuv db rf emc signal level antenna");
+            }
+            "resistance" => {
+                b.add("SMD resistor code", "SMD", Kind::Code(CodeFmt::Smd), "smd code marking 103 1002 4r7 r47 surface mount resistor electronics", true);
+                b.add("resistor color bands", "bands", Kind::Code(CodeFmt::Bands), "color colour code bands stripes resistor brown black red electronics", true);
+            }
+            "capacitance" => {
+                b.add("capacitor code", "cap code", Kind::Code(CodeFmt::Cap), "capacitor marking code 104 222 473 ceramic film electronics", true);
+            }
+            _ => {}
+        }
+    }
+
+    // More physics and electronics: (id, name, units as (name, symbol, factor to base, keywords)).
+    let more: &[(&str, &str, &[super::Row])] = &[
+        ("resistivity", "Electrical Resistivity", &[
+            ("ohm meter", "Ω⋅m", "1", "resistivity material"),
+            ("ohm centimeter", "Ω⋅cm", "0.01", ""),
+            ("microohm centimeter", "µΩ⋅cm", "1e-8", "uohm cm metal"),
+            ("nanoohm meter", "nΩ⋅m", "1e-9", "copper"),
+            ("ohm square millimeter per meter", "Ω⋅mm²/m", "1e-6", "wire cable"),
+            ("ohm circular mil per foot", "Ω⋅cmil/ft", "pi/4*(inch/1000)^2/ft", "wire american"),
+        ]),
+        ("conductivity", "Electrical Conductivity", &[
+            ("siemens per meter", "S/m", "1", "conductivity"),
+            ("millisiemens per centimeter", "mS/cm", "0.1", "water ec"),
+            ("microsiemens per centimeter", "µS/cm", "1e-4", "us/cm water quality ec tds aquarium"),
+            ("decisiemens per meter", "dS/m", "0.1", "soil salinity ec"),
+            ("megasiemens per meter", "MS/m", "1e6", "metal"),
+            ("percent IACS", "%IACS", "1e8/1.7241/100", "copper standard conductivity"),
+        ]),
+        ("efield", "Electric Field", &[
+            ("volt per meter", "V/m", "1", "electric field strength"),
+            ("kilovolt per meter", "kV/m", "1000", ""),
+            ("volt per centimeter", "V/cm", "100", ""),
+            ("kilovolt per millimeter", "kV/mm", "1e6", "dielectric strength breakdown insulation"),
+            ("volt per mil", "V/mil", "1000/inch", "dielectric strength breakdown"),
+        ]),
+        ("magh", "Magnetic Field Strength", &[
+            ("ampere per meter", "A/m", "1", "magnetic field strength h field"),
+            ("kiloampere per meter", "kA/m", "1000", "coercivity magnet"),
+            ("oersted", "Oe", "1000/(4*pi)", "cgs coercivity"),
+            ("ampere-turn per inch", "At/in", "1/inch", "coil"),
+        ]),
+        ("tempdiff", "Temperature Difference", &[
+            ("kelvin (difference)", "ΔK", "1", "temperature change rise delta"),
+            ("degree Celsius (difference)", "Δ°C", "1", "temperature change rise delta"),
+            ("degree Fahrenheit (difference)", "Δ°F", "5/9", "temperature change rise delta"),
+            ("degree Rankine (difference)", "Δ°R", "5/9", ""),
+        ]),
+        ("specheat", "Specific Heat Capacity", &[
+            ("joule per kilogram kelvin", "J/(kg⋅K)", "1", "specific heat capacity"),
+            ("kilojoule per kilogram kelvin", "kJ/(kg⋅K)", "1000", ""),
+            ("joule per gram kelvin", "J/(g⋅K)", "1000", ""),
+            ("calorie per gram degree", "cal/(g⋅°C)", "4184", "water"),
+            ("BTU per pound degree Fahrenheit", "BTU/(lb⋅°F)", "btu/(lb*5/9)", ""),
+        ]),
+        ("thermcond", "Thermal Conductivity", &[
+            ("watt per meter kelvin", "W/(m⋅K)", "1", "thermal conductivity insulation heat sink paste"),
+            ("milliwatt per meter kelvin", "mW/(m⋅K)", "1e-3", "insulation"),
+            ("BTU per hour foot degree Fahrenheit", "BTU/(h⋅ft⋅°F)", "btu/(3600*ft*5/9)", ""),
+            ("BTU inch per hour square foot °F", "BTU⋅in/(h⋅ft²⋅°F)", "btu*inch/(3600*ft^2*5/9)", "k value insulation"),
+            ("calorie per second centimeter °C", "cal/(s⋅cm⋅°C)", "418.4", ""),
+        ]),
+        ("irradiance", "Irradiance & Heat Flux", &[
+            ("watt per square meter", "W/m²", "1", "irradiance heat flux solar radiation intensity"),
+            ("kilowatt per square meter", "kW/m²", "1000", "solar"),
+            ("milliwatt per square centimeter", "mW/cm²", "10", "uv laser"),
+            ("watt per square centimeter", "W/cm²", "1e4", "laser"),
+            ("BTU per hour square foot", "BTU/(h⋅ft²)", "btu/(3600*ft^2)", ""),
+            ("sun (standard solar)", "sun", "1000", "solar panel stc peak"),
+            ("langley per minute", "Ly/min", "41840/60", "solar"),
+        ]),
+        ("luminance", "Luminance (Brightness)", &[
+            ("candela per square meter (nit)", "cd/m²", "1", "nits nit brightness screen monitor hdr display luminance"),
+            ("kilonit", "knit", "1000", "kcd/m2 hdr sun"),
+            ("foot-lambert", "fL", "1/(pi*ft^2)", "cinema projector"),
+            ("lambert", "La", "1e4/pi", ""),
+            ("stilb", "sb", "1e4", ""),
+            ("apostilb", "asb", "1/pi", ""),
+        ]),
+        ("colortemp", "Color Temperature", &[("kelvin (color)", "K(CCT)", "1", "color temperature white balance cct light bulb warm cool")]),
+        ("exposure", "Radiation Exposure", &[
+            ("coulomb per kilogram", "C/kg", "1", "radiation exposure"),
+            ("roentgen", "R", "2.58e-4", "x-ray"),
+            ("milliroentgen", "mR", "2.58e-7", ""),
+            ("microroentgen", "µR", "2.58e-10", "ur"),
+        ]),
+        ("doserate", "Radiation Dose Rate", &[
+            ("sievert per hour", "Sv/h", "1", "dose rate geiger counter radiation"),
+            ("millisievert per hour", "mSv/h", "1e-3", ""),
+            ("microsievert per hour", "µSv/h", "1e-6", "usv/h geiger background"),
+            ("nanosievert per hour", "nSv/h", "1e-9", "background"),
+            ("millisievert per year", "mSv/yr", "1e-3*3600/yr", "annual dose limit background"),
+            ("rem per hour", "rem/h", "0.01", ""),
+            ("millirem per hour", "mrem/h", "1e-5", ""),
+            ("millirem per year", "mrem/yr", "1e-5*3600/yr", "annual"),
+        ]),
+        ("momentum", "Momentum", &[
+            ("kilogram meter per second", "kg⋅m/s", "1", "momentum impulse"),
+            ("newton second", "N⋅s", "1", "impulse"),
+            ("gram centimeter per second", "g⋅cm/s", "1e-5", "cgs"),
+            ("pound foot per second", "lb⋅ft/s", "lb*ft", ""),
+            ("pound-force second", "lbf⋅s", "lbf", "impulse rocket motor"),
+            ("MeV per c", "MeV/c", "1e6*ev/c", "particle physics"),
+        ]),
+        ("inertia", "Moment of Inertia", &[
+            ("kilogram square meter", "kg⋅m²", "1", "moment of inertia rotational"),
+            ("kilogram square centimeter", "kg⋅cm²", "1e-4", ""),
+            ("gram square centimeter", "g⋅cm²", "1e-7", ""),
+            ("pound square foot", "lb⋅ft²", "lb*ft^2", ""),
+            ("pound square inch", "lb⋅in²", "lb*inch^2", ""),
+            ("ounce square inch", "oz⋅in²", "lb/16*inch^2", "motor rotor"),
+        ]),
+        ("stiffness", "Spring Rate (Stiffness)", &[
+            ("newton per meter", "N/m", "1", "spring rate constant stiffness"),
+            ("newton per millimeter", "N/mm", "1000", "spring suspension coilover"),
+            ("kilogram-force per millimeter", "kgf/mm", "g0*1000", "spring suspension coilover"),
+            ("kilogram-force per centimeter", "kgf/cm", "g0*100", ""),
+            ("pound-force per inch", "lbf/in", "lbf/inch", "spring suspension lb/in"),
+        ]),
+        ("tension", "Surface Tension", &[
+            ("newton per meter (surface)", "N/m", "1", "surface tension"),
+            ("millinewton per meter", "mN/m", "1e-3", "water"),
+            ("dyne per centimeter", "dyn/cm", "1e-3", "cgs"),
+            ("pound-force per inch (surface)", "lbf/in", "lbf/inch", ""),
+        ]),
+        ("massflow", "Mass Flow Rate", &[
+            ("kilogram per second", "kg/s", "1", "mass flow"),
+            ("kilogram per hour", "kg/h", "1/3600", ""),
+            ("gram per second", "g/s", "1e-3", "maf sensor engine"),
+            ("tonne per hour", "t/h", "1/3.6", "industrial"),
+            ("pound per second", "lb/s", "lb", ""),
+            ("pound per minute", "lb/min", "lb/60", "turbo compressor"),
+            ("pound per hour", "lb/h", "lb/3600", "injector"),
+        ]),
+        ("areal", "Paper & Fabric Weight", &[
+            ("gram per square meter", "g/m²", "1e-3", "gsm paper weight fabric grammage"),
+            ("kilogram per square meter", "kg/m²", "1", "areal density"),
+            ("milligram per square centimeter", "mg/cm²", "1e-2", ""),
+            ("ounce per square yard", "oz/yd²", "lb/16/yd^2", "fabric denim weight"),
+            ("pound per square foot", "lb/ft²", "lb/ft^2", "load"),
+            ("bond paper pound (17×22 in, 500 sheets)", "lb bond", "lb/(500*17*22*inch^2)", "paper weight 20 lb copy paper"),
+            ("cover/card pound (20×26 in, 500 sheets)", "lb cover", "lb/(500*20*26*inch^2)", "card stock paper weight"),
+        ]),
+        ("lineardensity", "Yarn & Fiber Weight", &[
+            ("tex (g/km)", "tex", "1e-6", "yarn thread fiber linear density"),
+            ("decitex", "dtex", "1e-7", "yarn fiber"),
+            ("denier (g/9 km)", "den", "1e-3/9000", "nylon stockings fishing line yarn"),
+            ("gram per meter", "g/m", "1e-3", "filament"),
+            ("kilogram per meter", "kg/m", "1", "linear density cable rope"),
+            ("pound per foot", "lb/ft", "lb/ft", "rope cable"),
+        ]),
+    ];
+    for &(id, name, units) in more {
+        b.category(id, name, false);
+        b.linear(units);
+        if id == "colortemp" {
+            b.reciprocal("mired", "MK⁻¹", "1e6", "micro reciprocal degree color gel filter cto ctb");
+            b.reciprocal("decamired", "daMK⁻¹", "1e5", "color gel filter");
+        }
     }
 
     b.category("stops", "Light & Exposure Stops", false);

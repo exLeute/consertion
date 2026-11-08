@@ -1746,6 +1746,7 @@ impl App {
             Kind::Note => "Notes look like A4, C#5, Bb3 or A4 +20¢".into(),
             Kind::Interval => "Intervals look like P5, m3, minor third or octave".into(),
             Kind::Coord(_) => "Coordinates use digits, N S E W, ° ′ ″ and commas".into(),
+            Kind::Code(f) => format!("Part codes look like {}", f.placeholder().trim_start_matches("e.g. ")),
             _ => "Only numbers and + − × ÷ ^ ( ) can be typed here".into(),
         };
         self.notify(msg, Level::Warn);
@@ -1813,6 +1814,7 @@ fn sample_input(u: &Unit, category: &str) -> String {
         Kind::Note => "A4".into(),
         Kind::Interval => "perfect fifth".into(),
         Kind::Coord(f) => f.format((50.4501, 30.5234)),
+        Kind::Code(f) => f.example().into(),
         _ => "1".into(),
     }
 }

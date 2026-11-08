@@ -51,6 +51,11 @@ pub const GROUPS: &[(&str, &str)] = &[
     ("healthcalc", "Health Calculators"),
     ("photocalc", "Photography Calculators"),
     ("musiccalc", "Music & Audio Calculators"),
+    ("bizcalc", "Business & Finance"),
+    ("physcalc", "Physics Calculators"),
+    ("devcalc", "Programming & Servers"),
+    ("gamecalc", "Gaming & Displays"),
+    ("homecalc", "Home & DIY"),
 ];
 const PCT: usize = 0;
 const MATH: usize = 1;
@@ -60,6 +65,11 @@ const DAY: usize = 4;
 const HEALTH: usize = 5;
 const PHOTO: usize = 6;
 const MUSIC: usize = 7;
+const BIZ: usize = 8;
+const PHYS: usize = 9;
+const DEV: usize = 10;
+const GAME: usize = 11;
+const HOME: usize = 12;
 
 fn pct(p: &R) -> R {
     p / int(100)
@@ -108,6 +118,28 @@ fn power(base: &R, exp: &R) -> Result<R, &'static str> {
 fn integer(q: &R, msg: &'static str) -> Result<BigInt, &'static str> {
     q.is_integer().then(|| q.to_integer()).ok_or(msg)
 }
+
+fn deg(q: &R) -> Result<f64, &'static str> {
+    Ok(fl(q)?.to_radians())
+}
+
+/// A percentage that must lie in 0..=100, as a fraction.
+fn share(q: &R, msg: &'static str) -> Result<f64, &'static str> {
+    let p = fl(q)?;
+    if (0.0..=100.0).contains(&p) { Ok(p / 100.0) } else { Err(msg) }
+}
+
+/// Standard gravity, m/s².
+fn g0() -> R {
+    super::expr("g0")
+}
+
+fn pi() -> R {
+    super::expr("pi")
+}
+
+/// Gravitational constant, m³/(kg·s²) (CODATA 2018).
+const BIG_G: f64 = 6.6743e-11;
 
 /// Gas constant, J/(mol·K) (exact since the 2019 SI).
 fn gas_r() -> R {
@@ -816,6 +848,1010 @@ pub const CALCS: &[Calc] = &[
             Ok(&v[1] * int(343) / (int(2) * &v[0]))
         },
     },
+    // ── More percentages ──
+    Calc {
+        name: "Percent error", symbol: "% err", keywords: "percent error accuracy measured actual experimental theoretical", group: PCT,
+        inputs: &[n("Measured", "9.6"), n("Actual", "9.81")], result: "Error", suffix: "%", out: Kind::Linear,
+        formula: "|measured − actual| ÷ |actual| × 100",
+        compute: |v| nonzero(&v[1], "Actual value can't be zero").map(|_| (&v[0] - &v[1]).abs() / v[1].abs() * int(100)),
+    },
+    // ── More math ──
+    Calc {
+        name: "Distance between two points", symbol: "dist", keywords: "distance points coordinates geometry x y length", group: MATH,
+        inputs: &[n("x₁", "0"), n("y₁", "0"), n("x₂", "3"), n("y₂", "4")], result: "Distance", suffix: "", out: Kind::Linear,
+        formula: "√((x₂ − x₁)² + (y₂ − y₁)²)",
+        compute: |v| {
+            let (dx, dy) = (fl(&(&v[2] - &v[0]))?, fl(&(&v[3] - &v[1]))?);
+            from_fl(dx.hypot(dy))
+        },
+    },
+    Calc {
+        name: "Slope of a line", symbol: "slope", keywords: "slope gradient line rise over run geometry", group: MATH,
+        inputs: &[n("x₁", "0"), n("y₁", "0"), n("x₂", "4"), n("y₂", "2")], result: "Slope", suffix: "", out: Kind::Linear,
+        formula: "(y₂ − y₁) ÷ (x₂ − x₁)",
+        compute: |v| {
+            let run = &v[2] - &v[0];
+            nonzero(&run, "The line is vertical (x₁ = x₂)")?;
+            Ok((&v[3] - &v[1]) / run)
+        },
+    },
+    Calc {
+        name: "Sphere volume", symbol: "V sphere", keywords: "sphere ball volume radius geometry", group: MATH,
+        inputs: &[n("Radius", "1")], result: "Volume", suffix: "", out: Kind::Linear,
+        formula: "4⁄3 × π × r³",
+        compute: |v| Ok(int(4) / int(3) * pi() * &v[0] * &v[0] * &v[0]),
+    },
+    Calc {
+        name: "Cylinder volume", symbol: "V cyl", keywords: "cylinder tank pipe can volume radius height geometry", group: MATH,
+        inputs: &[n("Radius", "1"), n("Height", "2")], result: "Volume", suffix: "", out: Kind::Linear,
+        formula: "π × r² × h",
+        compute: |v| Ok(pi() * &v[0] * &v[0] * &v[1]),
+    },
+    Calc {
+        name: "Cone volume", symbol: "V cone", keywords: "cone volume radius height geometry funnel", group: MATH,
+        inputs: &[n("Radius", "1"), n("Height", "3")], result: "Volume", suffix: "", out: Kind::Linear,
+        formula: "π × r² × h ÷ 3",
+        compute: |v| Ok(pi() * &v[0] * &v[0] * &v[1] / int(3)),
+    },
+    Calc {
+        name: "Triangle area from three sides", symbol: "Heron", keywords: "triangle area heron sides geometry", group: MATH,
+        inputs: &[n("Side a", "3"), n("Side b", "4"), n("Side c", "5")], result: "Area", suffix: "", out: Kind::Linear,
+        formula: "√(s(s−a)(s−b)(s−c)),  s = (a + b + c) ÷ 2",
+        compute: |v| {
+            let (a, b, c) = (fl(&v[0])?, fl(&v[1])?, fl(&v[2])?);
+            let s = (a + b + c) / 2.0;
+            let q = s * (s - a) * (s - b) * (s - c);
+            if a <= 0.0 || b <= 0.0 || c <= 0.0 || q < 0.0 {
+                return Err("Those sides don't make a triangle");
+            }
+            from_fl(q.sqrt())
+        },
+    },
+    Calc {
+        name: "Triangle area from base and height", symbol: "½bh", keywords: "triangle area base height geometry", group: MATH,
+        inputs: &[n("Base", "6"), n("Height", "4")], result: "Area", suffix: "", out: Kind::Linear,
+        formula: "base × height ÷ 2",
+        compute: |v| Ok(&v[0] * &v[1] / int(2)),
+    },
+    Calc {
+        name: "Sine", symbol: "sin", keywords: "sin sine trigonometry angle degrees", group: MATH,
+        inputs: &[n("Angle (°)", "30")], result: "sin", suffix: "", out: Kind::Linear,
+        formula: "sin(angle)",
+        compute: |v| from_fl(deg(&v[0])?.sin()),
+    },
+    Calc {
+        name: "Cosine", symbol: "cos", keywords: "cos cosine trigonometry angle degrees", group: MATH,
+        inputs: &[n("Angle (°)", "60")], result: "cos", suffix: "", out: Kind::Linear,
+        formula: "cos(angle)",
+        compute: |v| from_fl(deg(&v[0])?.cos()),
+    },
+    Calc {
+        name: "Tangent", symbol: "tan", keywords: "tan tangent trigonometry angle degrees slope", group: MATH,
+        inputs: &[n("Angle (°)", "45")], result: "tan", suffix: "", out: Kind::Linear,
+        formula: "tan(angle)",
+        compute: |v| {
+            let a = fl(&v[0])?;
+            if (a - 90.0).rem_euclid(180.0) == 0.0 {
+                return Err("Tangent is undefined at 90° + k·180°");
+            }
+            from_fl(a.to_radians().tan())
+        },
+    },
+    Calc {
+        name: "Angle from two sides", symbol: "atan", keywords: "angle arctan atan inverse tangent opposite adjacent slope degrees trigonometry roof pitch", group: MATH,
+        inputs: &[n("Opposite (rise)", "1"), n("Adjacent (run)", "1")], result: "Angle", suffix: "°", out: Kind::Linear,
+        formula: "atan2(opposite, adjacent)",
+        compute: |v| from_fl(fl(&v[0])?.atan2(fl(&v[1])?).to_degrees()),
+    },
+    Calc {
+        name: "Fibonacci number", symbol: "F(n)", keywords: "fibonacci sequence number math", group: MATH,
+        inputs: &[n("n", "50")], result: "F(n)", suffix: "", out: Kind::Linear,
+        formula: "F(n) = F(n−1) + F(n−2),  F(0) = 0, F(1) = 1",
+        compute: |v| {
+            let n = whole(&v[0], 20_000, "Use a whole number from 0 to 20000")?;
+            let (mut a, mut b) = (BigInt::zero(), BigInt::one());
+            for _ in 0..n {
+                let next = &a + &b;
+                a = std::mem::replace(&mut b, next);
+            }
+            Ok(R::from_integer(a))
+        },
+    },
+    // ── More electronics ──
+    Calc {
+        name: "Resistors in series", symbol: "R ser", keywords: "series resistors total resistance sum electronics", group: ELEC,
+        inputs: &[n("R₁ (Ω)", "1000"), n("R₂ (Ω)", "2200"), n("R₃ (Ω)", "0"), n("R₄ (Ω)", "0")], result: "Total", suffix: " Ω", out: Kind::Linear,
+        formula: "R₁ + R₂ + R₃ + R₄",
+        compute: |v| Ok(v.iter().sum()),
+    },
+    Calc {
+        name: "Capacitors in series", symbol: "C ser", keywords: "series capacitors total capacitance electronics", group: ELEC,
+        inputs: &[n("C₁ (µF)", "10"), n("C₂ (µF)", "10")], result: "Total", suffix: " µF", out: Kind::Linear,
+        formula: "C₁ × C₂ ÷ (C₁ + C₂)",
+        compute: |v| {
+            let sum = &v[0] + &v[1];
+            nonzero(&sum, "Total can't be zero")?;
+            Ok(&v[0] * &v[1] / sum)
+        },
+    },
+    Calc {
+        name: "Capacitors in parallel", symbol: "C par", keywords: "parallel capacitors total capacitance electronics", group: ELEC,
+        inputs: &[n("C₁ (µF)", "10"), n("C₂ (µF)", "4.7"), n("C₃ (µF)", "0"), n("C₄ (µF)", "0")], result: "Total", suffix: " µF", out: Kind::Linear,
+        formula: "C₁ + C₂ + C₃ + C₄",
+        compute: |v| Ok(v.iter().sum()),
+    },
+    Calc {
+        name: "Nearest standard resistor value", symbol: "E12/E24", keywords: "e series e12 e24 e96 standard resistor capacitor value preferred nearest electronics", group: ELEC,
+        inputs: &[n("Value", "5000"), n("Series (6, 12, 24, 48, 96, 192)", "24")], result: "Nearest standard value", suffix: "", out: Kind::Linear,
+        formula: "Closest value of the E-series, by ratio",
+        compute: |v| {
+            let series = whole(&v[1], 192, "Series is 6, 12, 24, 48, 96 or 192")?;
+            super::parts::nearest_e(&v[0], series)
+        },
+    },
+    Calc {
+        name: "Inductive reactance", symbol: "X_L", keywords: "inductive reactance inductor impedance frequency ac electronics", group: ELEC,
+        inputs: &[n("Frequency (Hz)", "1000"), n("Inductance (mH)", "10")], result: "Reactance", suffix: " Ω", out: Kind::Linear,
+        formula: "2π × f × L",
+        compute: |v| Ok(int(2) * pi() * &v[0] * &v[1] / int(1000)),
+    },
+    Calc {
+        name: "Capacitive reactance", symbol: "X_C", keywords: "capacitive reactance capacitor impedance frequency ac electronics", group: ELEC,
+        inputs: &[n("Frequency (Hz)", "1000"), n("Capacitance (µF)", "1")], result: "Reactance", suffix: " Ω", out: Kind::Linear,
+        formula: "1 ÷ (2π × f × C)",
+        compute: |v| {
+            let d = int(2) * pi() * &v[0] * &v[1] / int(1_000_000);
+            nonzero(&d, "Frequency and capacitance must be above zero")?;
+            Ok(R::one() / d)
+        },
+    },
+    Calc {
+        name: "RC filter cutoff frequency", symbol: "f_c RC", keywords: "rc low pass high pass filter cutoff corner frequency -3db electronics audio", group: ELEC,
+        inputs: &[n("Resistance (Ω)", "1000"), n("Capacitance (nF)", "100")], result: "Cutoff", suffix: " Hz", out: Kind::Linear,
+        formula: "1 ÷ (2π × R × C)",
+        compute: |v| {
+            let d = int(2) * pi() * &v[0] * &v[1] / int(1_000_000_000);
+            nonzero(&d, "R and C must be above zero")?;
+            Ok(R::one() / d)
+        },
+    },
+    Calc {
+        name: "RL filter cutoff frequency", symbol: "f_c RL", keywords: "rl filter cutoff corner frequency inductor electronics", group: ELEC,
+        inputs: &[n("Resistance (Ω)", "100"), n("Inductance (mH)", "10")], result: "Cutoff", suffix: " Hz", out: Kind::Linear,
+        formula: "R ÷ (2π × L)",
+        compute: |v| {
+            nonzero(&v[1], "Inductance must be above zero")?;
+            Ok(&v[0] / (int(2) * pi() * &v[1] / int(1000)))
+        },
+    },
+    Calc {
+        name: "555 timer frequency (astable)", symbol: "555 f", keywords: "555 timer astable oscillator frequency blinker ne555 electronics", group: ELEC,
+        inputs: &[n("R1 (Ω)", "1000"), n("R2 (Ω)", "10000"), n("C (µF)", "10")], result: "Frequency", suffix: " Hz", out: Kind::Linear,
+        formula: "1 ÷ (ln 2 × (R1 + 2·R2) × C)",
+        compute: |v| {
+            let rc = fl(&((&v[0] + int(2) * &v[1]) * &v[2]))? * 1e-6;
+            if rc <= 0.0 {
+                return Err("Resistors and capacitor must be above zero");
+            }
+            from_fl(1.0 / (std::f64::consts::LN_2 * rc))
+        },
+    },
+    Calc {
+        name: "555 timer duty cycle (astable)", symbol: "555 duty", keywords: "555 timer astable duty cycle high time electronics", group: ELEC,
+        inputs: &[n("R1 (Ω)", "1000"), n("R2 (Ω)", "10000")], result: "Duty cycle", suffix: "%", out: Kind::Linear,
+        formula: "(R1 + R2) ÷ (R1 + 2·R2) × 100",
+        compute: |v| {
+            let d = &v[0] + int(2) * &v[1];
+            nonzero(&d, "Resistors must be above zero")?;
+            Ok((&v[0] + &v[1]) / d * int(100))
+        },
+    },
+    Calc {
+        name: "555 timer pulse length (monostable)", symbol: "555 t", keywords: "555 timer monostable one shot pulse delay electronics", group: ELEC,
+        inputs: &[n("R (Ω)", "100000"), n("C (µF)", "10")], result: "Pulse length", suffix: " s", out: Kind::Linear,
+        formula: "1.1 × R × C",
+        compute: |v| Ok(int(11) / int(10) * &v[0] * &v[1] / int(1_000_000)),
+    },
+    Calc {
+        name: "Op-amp gain (non-inverting)", symbol: "1+Rf/Rg", keywords: "op amp opamp operational amplifier gain non inverting feedback electronics", group: ELEC,
+        inputs: &[n("Feedback Rf (Ω)", "9000"), n("Ground Rg (Ω)", "1000")], result: "Gain", suffix: "×", out: Kind::Linear,
+        formula: "1 + Rf ÷ Rg",
+        compute: |v| nonzero(&v[1], "Rg can't be zero").map(|_| R::one() + &v[0] / &v[1]),
+    },
+    Calc {
+        name: "Op-amp gain (inverting)", symbol: "−Rf/Rin", keywords: "op amp opamp operational amplifier gain inverting feedback electronics", group: ELEC,
+        inputs: &[n("Feedback Rf (Ω)", "10000"), n("Input Rin (Ω)", "1000")], result: "Gain", suffix: "×", out: Kind::Linear,
+        formula: "−Rf ÷ Rin",
+        compute: |v| nonzero(&v[1], "Rin can't be zero").map(|_| -(&v[0] / &v[1])),
+    },
+    Calc {
+        name: "LM317 output voltage", symbol: "LM317", keywords: "lm317 adjustable voltage regulator output resistor divider electronics", group: ELEC,
+        inputs: &[n("R1 (Ω)", "240"), n("R2 (Ω)", "720")], result: "Output", suffix: " V", out: Kind::Linear,
+        formula: "1.25 × (1 + R2 ÷ R1)",
+        compute: |v| nonzero(&v[0], "R1 can't be zero").map(|_| int(5) / int(4) * (R::one() + &v[1] / &v[0])),
+    },
+    Calc {
+        name: "Wire resistance", symbol: "R wire", keywords: "wire cable resistance length cross section copper aluminium resistivity electronics", group: ELEC,
+        inputs: &[n("Length (m)", "10"), n("Cross-section (mm²)", "1.5"), n("Resistivity (Ω·m, copper 1.68e-8)", "1.68e-8")], result: "Resistance", suffix: " Ω", out: Kind::Linear,
+        formula: "ρ × length ÷ area",
+        compute: |v| {
+            positive(&v[1], "Cross-section must be above zero")?;
+            Ok(&v[2] * &v[0] / (&v[1] / int(1_000_000)))
+        },
+    },
+    Calc {
+        name: "Cable voltage drop", symbol: "V drop", keywords: "cable wire voltage drop loss length current cross section copper dc electronics", group: ELEC,
+        inputs: &[n("Current (A)", "10"), n("One-way length (m)", "10"), n("Cross-section (mm²)", "2.5"), n("Resistivity (Ω·m, copper 1.68e-8)", "1.68e-8")], result: "Voltage drop", suffix: " V", out: Kind::Linear,
+        formula: "I × ρ × 2 × length ÷ area (there and back)",
+        compute: |v| {
+            positive(&v[2], "Cross-section must be above zero")?;
+            Ok(&v[0] * &v[3] * int(2) * &v[1] / (&v[2] / int(1_000_000)))
+        },
+    },
+    Calc {
+        name: "Battery energy", symbol: "Wh", keywords: "battery energy watt hours mah capacity power bank flight lithium electronics", group: ELEC,
+        inputs: &[n("Capacity (mAh)", "10000"), n("Voltage (V)", "3.7")], result: "Energy", suffix: " Wh", out: Kind::Linear,
+        formula: "mAh × V ÷ 1000",
+        compute: |v| Ok(&v[0] * &v[1] / int(1000)),
+    },
+    Calc {
+        name: "Battery charge time", symbol: "t charge", keywords: "battery charge time charging current mah electronics", group: ELEC,
+        inputs: &[n("Capacity (mAh)", "3000"), n("Charge current (mA)", "1000"), n("Efficiency (%)", "85")], result: "Time", suffix: "", out: Kind::Duration(DurFmt::Clock),
+        formula: "capacity ÷ (current × efficiency)",
+        compute: |v| {
+            positive(&v[1], "Current must be above zero")?;
+            positive(&v[2], "Efficiency must be above zero")?;
+            Ok(&v[0] / (&v[1] * pct(&v[2])) * int(3600))
+        },
+    },
+    Calc {
+        name: "Capacitor energy", symbol: "½CV²", keywords: "capacitor energy stored joules voltage electronics", group: ELEC,
+        inputs: &[n("Capacitance (µF)", "1000"), n("Voltage (V)", "25")], result: "Energy", suffix: " J", out: Kind::Linear,
+        formula: "½ × C × V²",
+        compute: |v| Ok(&v[0] / int(1_000_000) * &v[1] * &v[1] / int(2)),
+    },
+    Calc {
+        name: "RMS from peak (sine)", symbol: "Vrms", keywords: "rms peak sine wave ac voltage amplitude electronics", group: ELEC,
+        inputs: &[n("Peak voltage", "325")], result: "RMS", suffix: "", out: Kind::Linear,
+        formula: "peak ÷ √2",
+        compute: |v| from_fl(fl(&v[0])? / std::f64::consts::SQRT_2),
+    },
+    Calc {
+        name: "Peak from RMS (sine)", symbol: "Vpk", keywords: "peak rms sine wave ac voltage mains amplitude peak to peak electronics", group: ELEC,
+        inputs: &[n("RMS voltage", "230")], result: "Peak", suffix: "", out: Kind::Linear,
+        formula: "RMS × √2  (peak-to-peak is twice that)",
+        compute: |v| from_fl(fl(&v[0])? * std::f64::consts::SQRT_2),
+    },
+    Calc {
+        name: "Transformer output voltage", symbol: "Ns/Np", keywords: "transformer turns ratio output voltage primary secondary windings electronics", group: ELEC,
+        inputs: &[n("Input voltage", "230"), n("Primary turns", "1000"), n("Secondary turns", "52")], result: "Output", suffix: " V", out: Kind::Linear,
+        formula: "Vin × Ns ÷ Np",
+        compute: |v| nonzero(&v[1], "Primary turns can't be zero").map(|_| &v[0] * &v[2] / &v[1]),
+    },
+    Calc {
+        name: "PCB trace width", symbol: "trace", keywords: "pcb trace width current copper oz ipc-2221 track printed circuit board electronics", group: ELEC,
+        inputs: &[n("Current (A)", "1"), n("Temperature rise (°C)", "10"), n("Copper weight (oz/ft²)", "1")], result: "Width (outer layer)", suffix: " mm", out: Kind::Linear,
+        formula: "IPC-2221: area = (I ÷ (0.048 × ΔT^0.44))^(1 ÷ 0.725) mil², width = area ÷ (oz × 1.378 mil)",
+        compute: |v| {
+            let (i, dt, oz) = (fl(&v[0])?, fl(&v[1])?, fl(&v[2])?);
+            if i <= 0.0 || dt <= 0.0 || oz <= 0.0 {
+                return Err("All values must be above zero");
+            }
+            let area = (i / (0.048 * dt.powf(0.44))).powf(1.0 / 0.725);
+            from_fl(area / (oz * 1.378) * 0.0254)
+        },
+    },
+    Calc {
+        name: "PWM average voltage", symbol: "PWM", keywords: "pwm duty cycle average voltage motor led dimming electronics", group: ELEC,
+        inputs: &[n("Supply voltage", "12"), n("Duty cycle (%)", "25")], result: "Average", suffix: " V", out: Kind::Linear,
+        formula: "V × duty ÷ 100",
+        compute: |v| Ok(&v[0] * pct(&v[1])),
+    },
+    Calc {
+        name: "AC power with power factor", symbol: "V·I·PF", keywords: "ac power real power factor watts va apparent single phase electronics", group: ELEC,
+        inputs: &[n("Voltage (V)", "230"), n("Current (A)", "5"), n("Power factor", "0.9")], result: "Real power", suffix: " W", out: Kind::Linear,
+        formula: "V × I × PF",
+        compute: |v| Ok(&v[0] * &v[1] * &v[2]),
+    },
+    Calc {
+        name: "Three-phase power", symbol: "3φ kW", keywords: "three phase 3 phase power kw line voltage current power factor motor electronics", group: ELEC,
+        inputs: &[n("Line voltage (V)", "400"), n("Current (A)", "16"), n("Power factor", "0.9")], result: "Power", suffix: " kW", out: Kind::Linear,
+        formula: "√3 × V × I × PF ÷ 1000",
+        compute: |v| from_fl(3f64.sqrt() * fl(&(&v[0] * &v[1] * &v[2]))? / 1000.0),
+    },
+    Calc {
+        name: "Quarter-wave antenna length", symbol: "λ/4", keywords: "antenna quarter wave wavelength length frequency radio ham whip rf electronics", group: ELEC,
+        inputs: &[n("Frequency (MHz)", "433"), n("Velocity factor", "0.95")], result: "Length", suffix: " cm", out: Kind::Linear,
+        formula: "c ÷ f ÷ 4 × velocity factor",
+        compute: |v| {
+            positive(&v[0], "Frequency must be above zero")?;
+            Ok(super::expr("c") / (&v[0] * int(1_000_000)) / int(4) * &v[1] * int(100))
+        },
+    },
+    Calc {
+        name: "Solar panel daily energy", symbol: "PV Wh", keywords: "solar panel photovoltaic pv daily energy sun hours output watt", group: ELEC,
+        inputs: &[n("Panel power (W)", "400"), n("Peak sun hours", "4"), n("System efficiency (%)", "80")], result: "Energy per day", suffix: " Wh", out: Kind::Linear,
+        formula: "W × sun hours × efficiency",
+        compute: |v| Ok(&v[0] * &v[1] * pct(&v[2])),
+    },
+    // ── Physics ──
+    Calc {
+        name: "Kinetic energy", symbol: "½mv²", keywords: "kinetic energy mass velocity speed joules physics", group: PHYS,
+        inputs: &[n("Mass (kg)", "1000"), n("Speed (m/s)", "20")], result: "Energy", suffix: " J", out: Kind::Linear,
+        formula: "½ × m × v²",
+        compute: |v| Ok(&v[0] * &v[1] * &v[1] / int(2)),
+    },
+    Calc {
+        name: "Potential energy", symbol: "mgh", keywords: "potential energy gravity height mass joules physics", group: PHYS,
+        inputs: &[n("Mass (kg)", "10"), n("Height (m)", "5")], result: "Energy", suffix: " J", out: Kind::Linear,
+        formula: "m × g × h  (g = 9.80665 m/s²)",
+        compute: |v| Ok(&v[0] * g0() * &v[1]),
+    },
+    Calc {
+        name: "Momentum", symbol: "p = mv", keywords: "momentum mass velocity physics impulse", group: PHYS,
+        inputs: &[n("Mass (kg)", "2"), n("Speed (m/s)", "3")], result: "Momentum", suffix: " kg·m/s", out: Kind::Linear,
+        formula: "m × v",
+        compute: |v| Ok(&v[0] * &v[1]),
+    },
+    Calc {
+        name: "Force from mass and acceleration", symbol: "F = ma", keywords: "force newton second law mass acceleration physics", group: PHYS,
+        inputs: &[n("Mass (kg)", "10"), n("Acceleration (m/s²)", "9.80665")], result: "Force", suffix: " N", out: Kind::Linear,
+        formula: "m × a",
+        compute: |v| Ok(&v[0] * &v[1]),
+    },
+    Calc {
+        name: "Pressure from force and area", symbol: "F/A", keywords: "pressure force area pascal physics", group: PHYS,
+        inputs: &[n("Force (N)", "100"), n("Area (m²)", "0.01")], result: "Pressure", suffix: " Pa", out: Kind::Linear,
+        formula: "F ÷ A",
+        compute: |v| nonzero(&v[1], "Area can't be zero").map(|_| &v[0] / &v[1]),
+    },
+    Calc {
+        name: "Density from mass and volume", symbol: "ρ = m/V", keywords: "density mass volume physics material", group: PHYS,
+        inputs: &[n("Mass (g)", "19.3"), n("Volume (cm³)", "1")], result: "Density", suffix: " g/cm³", out: Kind::Linear,
+        formula: "m ÷ V",
+        compute: |v| nonzero(&v[1], "Volume can't be zero").map(|_| &v[0] / &v[1]),
+    },
+    Calc {
+        name: "Free fall time", symbol: "t fall", keywords: "free fall drop time height gravity physics", group: PHYS,
+        inputs: &[n("Height (m)", "20")], result: "Time", suffix: " s", out: Kind::Linear,
+        formula: "√(2h ÷ g)  (no air resistance)",
+        compute: |v| {
+            if v[0].is_negative() {
+                return Err("Height can't be negative");
+            }
+            from_fl((2.0 * fl(&v[0])? / 9.80665).sqrt())
+        },
+    },
+    Calc {
+        name: "Free fall impact speed", symbol: "v fall", keywords: "free fall impact speed velocity height gravity physics", group: PHYS,
+        inputs: &[n("Height (m)", "20")], result: "Speed", suffix: " m/s", out: Kind::Linear,
+        formula: "√(2gh)  (no air resistance)",
+        compute: |v| {
+            if v[0].is_negative() {
+                return Err("Height can't be negative");
+            }
+            from_fl((2.0 * 9.80665 * fl(&v[0])?).sqrt())
+        },
+    },
+    Calc {
+        name: "Projectile range", symbol: "range", keywords: "projectile range ballistic throw launch angle speed distance physics", group: PHYS,
+        inputs: &[n("Launch speed (m/s)", "20"), n("Angle (°)", "45")], result: "Range (flat ground)", suffix: " m", out: Kind::Linear,
+        formula: "v² × sin(2θ) ÷ g",
+        compute: |v| from_fl(fl(&v[0])?.powi(2) * (2.0 * deg(&v[1])?).sin() / 9.80665),
+    },
+    Calc {
+        name: "Pendulum period", symbol: "T pend", keywords: "pendulum period swing length gravity physics clock", group: PHYS,
+        inputs: &[n("Length (m)", "1")], result: "Period", suffix: " s", out: Kind::Linear,
+        formula: "2π × √(L ÷ g)",
+        compute: |v| {
+            positive(&v[0], "Length must be above zero")?;
+            from_fl(std::f64::consts::TAU * (fl(&v[0])? / 9.80665).sqrt())
+        },
+    },
+    Calc {
+        name: "Centripetal force", symbol: "mv²/r", keywords: "centripetal force circular motion radius speed physics", group: PHYS,
+        inputs: &[n("Mass (kg)", "1"), n("Speed (m/s)", "10"), n("Radius (m)", "5")], result: "Force", suffix: " N", out: Kind::Linear,
+        formula: "m × v² ÷ r",
+        compute: |v| nonzero(&v[2], "Radius can't be zero").map(|_| &v[0] * &v[1] * &v[1] / &v[2]),
+    },
+    Calc {
+        name: "Gravitational force", symbol: "Gm₁m₂/r²", keywords: "gravity gravitational force newton masses distance physics", group: PHYS,
+        inputs: &[n("Mass 1 (kg)", "5.972e24"), n("Mass 2 (kg)", "7.342e22"), n("Distance (m)", "3.844e8")], result: "Force", suffix: " N", out: Kind::Linear,
+        formula: "G × m₁ × m₂ ÷ r²  (G = 6.6743e-11)",
+        compute: |v| {
+            positive(&v[2], "Distance must be above zero")?;
+            from_fl(BIG_G * fl(&v[0])? * fl(&v[1])? / fl(&v[2])?.powi(2))
+        },
+    },
+    Calc {
+        name: "Escape velocity", symbol: "v esc", keywords: "escape velocity planet mass radius gravity space physics", group: PHYS,
+        inputs: &[n("Planet mass (kg)", "5.972e24"), n("Radius (m)", "6.371e6")], result: "Escape velocity", suffix: " m/s", out: Kind::Linear,
+        formula: "√(2GM ÷ r)",
+        compute: |v| {
+            positive(&v[0], "Mass must be above zero")?;
+            positive(&v[1], "Radius must be above zero")?;
+            from_fl((2.0 * BIG_G * fl(&v[0])? / fl(&v[1])?).sqrt())
+        },
+    },
+    Calc {
+        name: "Mass–energy equivalence", symbol: "E = mc²", keywords: "e=mc2 mass energy equivalence einstein relativity physics", group: PHYS,
+        inputs: &[n("Mass (kg)", "0.001")], result: "Energy", suffix: " J", out: Kind::Linear,
+        formula: "m × c²",
+        compute: |v| Ok(&v[0] * super::expr("c^2")),
+    },
+    Calc {
+        name: "Heat energy", symbol: "Q = mcΔT", keywords: "heat energy specific heat temperature change mass water physics thermodynamics", group: PHYS,
+        inputs: &[n("Mass (kg)", "1"), n("Specific heat (J/(kg·K), water 4186)", "4186"), n("Temperature change (°C)", "80")], result: "Energy", suffix: " kJ", out: Kind::Linear,
+        formula: "m × c × ΔT",
+        compute: |v| Ok(&v[0] * &v[1] * &v[2] / int(1000)),
+    },
+    Calc {
+        name: "Time to heat water", symbol: "kettle", keywords: "kettle boil water heating time power watts temperature physics", group: PHYS,
+        inputs: &[n("Water (L)", "1"), n("From (°C)", "20"), n("To (°C)", "100"), n("Heater power (W)", "2000")], result: "Time (no losses)", suffix: "", out: Kind::Duration(DurFmt::Clock),
+        formula: "4186 × liters × (to − from) ÷ watts",
+        compute: |v| {
+            positive(&v[3], "Power must be above zero")?;
+            Ok(int(4186) * &v[0] * (&v[2] - &v[1]) / &v[3])
+        },
+    },
+    Calc {
+        name: "Radioactive decay (half-life)", symbol: "N(t)", keywords: "half life half-life decay radioactive remaining amount carbon dating physics medicine", group: PHYS,
+        inputs: &[n("Starting amount", "100"), n("Half-life", "5730"), n("Time passed (same unit)", "10000")], result: "Remaining", suffix: "", out: Kind::Linear,
+        formula: "N₀ × ½^(t ÷ half-life)",
+        compute: |v| {
+            positive(&v[1], "Half-life must be above zero")?;
+            from_fl(fl(&v[0])? * 0.5f64.powf(fl(&v[2])? / fl(&v[1])?))
+        },
+    },
+    Calc {
+        name: "Wavelength from frequency", symbol: "λ = v/f", keywords: "wavelength frequency wave speed sound light physics", group: PHYS,
+        inputs: &[n("Frequency (Hz)", "440"), n("Wave speed (m/s, sound 343)", "343")], result: "Wavelength", suffix: " m", out: Kind::Linear,
+        formula: "v ÷ f",
+        compute: |v| nonzero(&v[0], "Frequency can't be zero").map(|_| &v[1] / &v[0]),
+    },
+    Calc {
+        name: "Speed of sound in air", symbol: "c air", keywords: "speed of sound air temperature acoustics physics", group: PHYS,
+        inputs: &[n("Temperature (°C)", "20")], result: "Speed", suffix: " m/s", out: Kind::Linear,
+        formula: "331.3 × √(1 + T ÷ 273.15)",
+        compute: |v| {
+            let t = fl(&v[0])?;
+            if t <= -273.15 {
+                return Err("Below absolute zero");
+            }
+            from_fl(331.3 * (1.0 + t / 273.15).sqrt())
+        },
+    },
+    Calc {
+        name: "Distance to lightning", symbol: "thunder", keywords: "lightning thunder distance storm seconds count sound physics", group: PHYS,
+        inputs: &[n("Seconds between flash and thunder", "6")], result: "Distance", suffix: " km", out: Kind::Linear,
+        formula: "seconds × 343 m/s",
+        compute: |v| Ok(&v[0] * int(343) / int(1000)),
+    },
+    // ── Business & finance ──
+    Calc {
+        name: "Add VAT / sales tax", symbol: "+VAT", keywords: "vat sales tax gst add net to gross price business", group: BIZ,
+        inputs: &[n("Net price", "100"), n("Tax rate (%)", "20")], result: "Price with tax", suffix: "", out: Kind::Currency,
+        formula: "net × (1 + rate ÷ 100)",
+        compute: |v| Ok(&v[0] * (R::one() + pct(&v[1]))),
+    },
+    Calc {
+        name: "Remove VAT / sales tax", symbol: "−VAT", keywords: "vat sales tax gst remove gross to net price excluding business", group: BIZ,
+        inputs: &[n("Price with tax", "120"), n("Tax rate (%)", "20")], result: "Net price", suffix: "", out: Kind::Currency,
+        formula: "gross ÷ (1 + rate ÷ 100)",
+        compute: |v| {
+            let d = R::one() + pct(&v[1]);
+            nonzero(&d, "Rate can't be −100%")?;
+            Ok(&v[0] / d)
+        },
+    },
+    Calc {
+        name: "Tax included in a price", symbol: "VAT in", keywords: "vat sales tax gst amount included in gross price business", group: BIZ,
+        inputs: &[n("Price with tax", "120"), n("Tax rate (%)", "20")], result: "Tax amount", suffix: "", out: Kind::Currency,
+        formula: "gross × rate ÷ (100 + rate)",
+        compute: |v| {
+            let d = int(100) + &v[1];
+            nonzero(&d, "Rate can't be −100%")?;
+            Ok(&v[0] * &v[1] / d)
+        },
+    },
+    Calc {
+        name: "Break-even point", symbol: "BEP", keywords: "break even point units sales fixed variable cost price contribution business", group: BIZ,
+        inputs: &[n("Fixed costs", "10000"), n("Price per unit", "50"), n("Variable cost per unit", "30")], result: "Units to break even", suffix: " units", out: Kind::Linear,
+        formula: "fixed ÷ (price − variable cost)",
+        compute: |v| {
+            let margin = &v[1] - &v[2];
+            positive(&margin, "Price must be above the variable cost")?;
+            Ok(&v[0] / margin)
+        },
+    },
+    Calc {
+        name: "Return on investment (ROI)", symbol: "ROI", keywords: "roi return on investment profit gain business", group: BIZ,
+        inputs: &[n("Final value", "1500"), n("Cost", "1000")], result: "ROI", suffix: "%", out: Kind::Linear,
+        formula: "(final − cost) ÷ cost × 100",
+        compute: |v| nonzero(&v[1], "Cost can't be zero").map(|_| (&v[0] - &v[1]) / &v[1] * int(100)),
+    },
+    Calc {
+        name: "Compound annual growth rate (CAGR)", symbol: "CAGR", keywords: "cagr compound annual growth rate return investment business", group: BIZ,
+        inputs: &[n("Start value", "1000"), n("End value", "2000"), n("Years", "5")], result: "CAGR", suffix: "%", out: Kind::Linear,
+        formula: "((end ÷ start)^(1 ÷ years) − 1) × 100",
+        compute: |v| {
+            positive(&v[0], "Start value must be above zero")?;
+            positive(&v[2], "Years must be above zero")?;
+            let ratio = fl(&(&v[1] / &v[0]))?;
+            if ratio < 0.0 {
+                return Err("End value can't be negative");
+            }
+            from_fl((ratio.powf(1.0 / fl(&v[2])?) - 1.0) * 100.0)
+        },
+    },
+    Calc {
+        name: "Doubling time", symbol: "2× time", keywords: "doubling time rule of 72 growth interest rate years business", group: BIZ,
+        inputs: &[n("Growth per year (%)", "7")], result: "Years to double", suffix: " years", out: Kind::Linear,
+        formula: "ln 2 ÷ ln(1 + rate ÷ 100)  (the rule of 72 approximates this)",
+        compute: |v| {
+            positive(&v[0], "Growth must be above zero")?;
+            from_fl(std::f64::consts::LN_2 / (1.0 + fl(&v[0])? / 100.0).ln())
+        },
+    },
+    Calc {
+        name: "Present value", symbol: "PV", keywords: "present value discount inflation purchasing power future money worth today business", group: BIZ,
+        inputs: &[n("Future amount", "10000"), n("Rate per year (%)", "3"), n("Years", "10")], result: "Worth today", suffix: "", out: Kind::Currency,
+        formula: "amount ÷ (1 + rate)^years",
+        compute: |v| {
+            let base = R::one() + pct(&v[1]);
+            positive(&base, "Rate must be above −100%")?;
+            Ok(&v[0] / power(&base, &v[2])?)
+        },
+    },
+    Calc {
+        name: "Savings with monthly deposits", symbol: "FV", keywords: "savings future value monthly deposit contribution investment retirement compound business", group: BIZ,
+        inputs: &[n("Monthly deposit", "200"), n("Yearly return (%)", "5"), n("Years", "20"), n("Starting balance", "0")], result: "Balance", suffix: "", out: Kind::Currency,
+        formula: "P × (1 + r)^n + D × ((1 + r)^n − 1) ÷ r,  r = rate ÷ 1200, n = years × 12",
+        compute: |v| {
+            let months = &v[2] * int(12);
+            let r = &v[1] / int(1200);
+            if r.is_zero() {
+                return Ok(&v[3] + &v[0] * months);
+            }
+            let g = power(&(R::one() + &r), &months)?;
+            Ok(&v[3] * &g + &v[0] * (g - R::one()) / r)
+        },
+    },
+    Calc {
+        name: "Monthly saving for a goal", symbol: "goal", keywords: "savings goal monthly deposit needed target future value business", group: BIZ,
+        inputs: &[n("Goal", "20000"), n("Yearly return (%)", "4"), n("Years", "5")], result: "Save per month", suffix: "", out: Kind::Currency,
+        formula: "goal × r ÷ ((1 + r)^n − 1),  r = rate ÷ 1200, n = years × 12",
+        compute: |v| {
+            let months = &v[2] * int(12);
+            positive(&months, "Years must be above zero")?;
+            let r = &v[1] / int(1200);
+            if r.is_zero() {
+                return Ok(&v[0] / months);
+            }
+            let g = power(&(R::one() + &r), &months)? - R::one();
+            nonzero(&g, "Rate is too small")?;
+            Ok(&v[0] * r / g)
+        },
+    },
+    Calc {
+        name: "APY from APR", symbol: "APY", keywords: "apy apr effective annual rate interest compounding ear business bank", group: BIZ,
+        inputs: &[n("APR (%)", "5"), n("Compounding per year", "12")], result: "APY", suffix: "%", out: Kind::Linear,
+        formula: "((1 + APR ÷ n)^n − 1) × 100",
+        compute: |v| {
+            positive(&v[1], "Compounding must be at least once a year")?;
+            let g = power(&(R::one() + pct(&v[0]) / &v[1]), &v[1])?;
+            Ok((g - R::one()) * int(100))
+        },
+    },
+    Calc {
+        name: "Straight-line depreciation", symbol: "depr.", keywords: "depreciation straight line asset yearly salvage value accounting business", group: BIZ,
+        inputs: &[n("Cost", "10000"), n("Salvage value", "1000"), n("Useful life (years)", "5")], result: "Per year", suffix: "", out: Kind::Currency,
+        formula: "(cost − salvage) ÷ years",
+        compute: |v| positive(&v[2], "Life must be above zero").map(|_| (&v[0] - &v[1]) / &v[2]),
+    },
+    Calc {
+        name: "Customer lifetime value", symbol: "LTV", keywords: "ltv clv customer lifetime value churn arpu saas subscription business", group: BIZ,
+        inputs: &[n("Revenue per customer per month", "30"), n("Gross margin (%)", "80"), n("Monthly churn (%)", "5")], result: "Lifetime value", suffix: "", out: Kind::Currency,
+        formula: "revenue × margin ÷ churn",
+        compute: |v| {
+            positive(&v[2], "Churn must be above zero")?;
+            Ok(&v[0] * pct(&v[1]) / pct(&v[2]))
+        },
+    },
+    Calc {
+        name: "Payback period", symbol: "payback", keywords: "payback period investment return months break even business", group: BIZ,
+        inputs: &[n("Investment", "12000"), n("Profit per month", "1000")], result: "Payback", suffix: " months", out: Kind::Linear,
+        formula: "investment ÷ monthly profit",
+        compute: |v| positive(&v[1], "Profit must be above zero").map(|_| &v[0] / &v[1]),
+    },
+    Calc {
+        name: "Freelance hourly rate", symbol: "rate/h", keywords: "freelance hourly rate contractor consultant income billable hours business", group: BIZ,
+        inputs: &[n("Yearly income wanted", "60000"), n("Billable hours per week", "25"), n("Working weeks per year", "46")], result: "Hourly rate", suffix: "", out: Kind::Currency,
+        formula: "income ÷ (hours × weeks)",
+        compute: |v| {
+            let h = &v[1] * &v[2];
+            positive(&h, "Hours and weeks must be above zero")?;
+            Ok(&v[0] / h)
+        },
+    },
+    Calc {
+        name: "Weekly pay with overtime", symbol: "overtime", keywords: "overtime pay wage hourly time and a half salary business", group: BIZ,
+        inputs: &[n("Hourly rate", "20"), n("Hours worked", "45"), n("Overtime after (hours)", "40"), n("Overtime multiplier", "1.5")], result: "Pay", suffix: "", out: Kind::Currency,
+        formula: "rate × regular hours + rate × multiplier × overtime hours",
+        compute: |v| {
+            let regular = if v[1] < v[2] { v[1].clone() } else { v[2].clone() };
+            let extra = &v[1] - &regular;
+            Ok(&v[0] * regular + &v[0] * &v[3] * extra)
+        },
+    },
+    Calc {
+        name: "Cloud cost per month", symbol: "$/h→mo", keywords: "cloud server vps instance hourly price monthly cost aws gcp azure hosting", group: BIZ,
+        inputs: &[n("Price per hour", "0.05"), n("Instances", "1")], result: "Per month (730 h)", suffix: "", out: Kind::Currency,
+        formula: "price × 730 hours × instances",
+        compute: |v| Ok(&v[0] * int(730) * &v[1]),
+    },
+    // ── Programming & servers ──
+    Calc {
+        name: "Allowed downtime (SLA)", symbol: "SLA", keywords: "sla uptime availability nines downtime 99.9 99.99 reliability sre", group: DEV,
+        inputs: &[n("Availability (%)", "99.9"), n("Period (days)", "365")], result: "Allowed downtime", suffix: "", out: Kind::Duration(DurFmt::Clock),
+        formula: "period × (1 − availability ÷ 100)",
+        compute: |v| {
+            share(&v[0], "Availability is between 0 and 100%")?;
+            Ok(&v[1] * int(86400) * (R::one() - pct(&v[0])))
+        },
+    },
+    Calc {
+        name: "Availability from downtime", symbol: "uptime %", keywords: "availability uptime downtime sla nines reliability sre", group: DEV,
+        inputs: &[n("Downtime (minutes)", "43.2"), n("Period (days)", "30")], result: "Availability", suffix: "%", out: Kind::Linear,
+        formula: "(1 − downtime ÷ period) × 100",
+        compute: |v| {
+            positive(&v[1], "Period must be above zero")?;
+            Ok((R::one() - &v[0] / (&v[1] * int(1440))) * int(100))
+        },
+    },
+    Calc {
+        name: "Concurrent requests (Little's law)", symbol: "L = λW", keywords: "little's law concurrency in flight requests latency throughput queue capacity planning", group: DEV,
+        inputs: &[n("Requests per second", "500"), n("Average latency (ms)", "200")], result: "Requests in flight", suffix: "", out: Kind::Linear,
+        formula: "rate × latency",
+        compute: |v| Ok(&v[0] * &v[1] / int(1000)),
+    },
+    Calc {
+        name: "Max throughput of workers", symbol: "workers", keywords: "throughput workers threads latency requests per second capacity planning", group: DEV,
+        inputs: &[n("Workers / threads", "16"), n("Time per request (ms)", "50")], result: "Max requests", suffix: " /s", out: Kind::Linear,
+        formula: "workers × 1000 ÷ latency",
+        compute: |v| positive(&v[1], "Latency must be above zero").map(|_| &v[0] * int(1000) / &v[1]),
+    },
+    Calc {
+        name: "Bandwidth-delay product", symbol: "BDP", keywords: "bandwidth delay product tcp window buffer size rtt latency network", group: DEV,
+        inputs: &[n("Bandwidth (Mbit/s)", "1000"), n("Round trip (ms)", "50")], result: "In flight", suffix: " KB", out: Kind::Linear,
+        formula: "Mbit/s × RTT ms ÷ 8",
+        compute: |v| Ok(&v[0] * &v[1] / int(8)),
+    },
+    Calc {
+        name: "Minimum ping over fiber", symbol: "ping", keywords: "ping latency round trip distance fiber optic speed of light network km", group: DEV,
+        inputs: &[n("Distance (km)", "1000")], result: "Best round trip", suffix: " ms", out: Kind::Linear,
+        formula: "2 × distance ÷ (c ÷ 1.468)  (light in glass, straight line)",
+        compute: |v| Ok(int(2) * &v[0] * int(1468) / int(1000) / super::expr("c") * int(1_000_000)),
+    },
+    Calc {
+        name: "Usable IPv4 hosts in a subnet", symbol: "/24 hosts", keywords: "subnet cidr prefix hosts ipv4 netmask network addresses", group: DEV,
+        inputs: &[n("Prefix length (/n)", "24")], result: "Usable hosts", suffix: "", out: Kind::Linear,
+        formula: "2^(32 − n) − 2  (/31 has 2, /32 has 1)",
+        compute: |v| {
+            let p = whole(&v[0], 32, "Prefix is 0 to 32")?;
+            let all = 1i64 << (32 - p);
+            Ok(int(if p >= 31 { all } else { all - 2 }))
+        },
+    },
+    Calc {
+        name: "Addresses in an IPv6 prefix", symbol: "/64 size", keywords: "ipv6 prefix addresses subnet cidr network", group: DEV,
+        inputs: &[n("Prefix length (/n)", "64")], result: "Addresses", suffix: "", out: Kind::Linear,
+        formula: "2^(128 − n)",
+        compute: |v| {
+            let p = whole(&v[0], 128, "Prefix is 0 to 128")?;
+            Ok(R::from_integer(BigInt::one() << (128 - p)))
+        },
+    },
+    Calc {
+        name: "Hash collision chance (birthday)", symbol: "collide", keywords: "birthday paradox hash collision probability uuid id bits random", group: DEV,
+        inputs: &[n("Number of items", "1000000"), n("Bits of randomness", "64")], result: "Chance of any collision", suffix: "%", out: Kind::Linear,
+        formula: "1 − e^(−n² ÷ 2^(bits+1))",
+        compute: |v| {
+            let (n, bits) = (fl(&v[0])?, fl(&v[1])?);
+            if n < 0.0 || bits <= 0.0 {
+                return Err("Use positive values");
+            }
+            from_fl(-(-(n * n) / 2f64.powf(bits + 1.0)).exp_m1() * 100.0)
+        },
+    },
+    Calc {
+        name: "Password entropy", symbol: "bits", keywords: "password entropy strength bits random characters length security", group: DEV,
+        inputs: &[n("Characters to choose from", "62"), n("Length", "16")], result: "Entropy", suffix: " bits", out: Kind::Linear,
+        formula: "length × log₂(characters)  (for truly random passwords)",
+        compute: |v| {
+            positive(&v[0], "Character count must be above zero")?;
+            from_fl(fl(&v[1])? * fl(&v[0])?.log2())
+        },
+    },
+    Calc {
+        name: "Bits needed for N values", symbol: "⌈log₂N⌉", keywords: "bits needed values range integer field width log2 encoding", group: DEV,
+        inputs: &[n("Number of different values", "1000")], result: "Bits", suffix: "", out: Kind::Linear,
+        formula: "⌈log₂ N⌉",
+        compute: |v| {
+            let n = integer(&v[0], "Use a whole number")?;
+            if n < BigInt::one() {
+                return Err("Use at least 1 value");
+            }
+            Ok(int((n - BigInt::one()).bits() as i64))
+        },
+    },
+    Calc {
+        name: "Base64 encoded size", symbol: "b64 size", keywords: "base64 encoded size bytes overhead data uri email", group: DEV,
+        inputs: &[n("Input size (bytes)", "1000")], result: "Encoded size", suffix: " bytes", out: Kind::Linear,
+        formula: "4 × ⌈bytes ÷ 3⌉",
+        compute: |v| {
+            let n = integer(&v[0], "Use a whole number of bytes")?;
+            Ok(R::from_integer((n + BigInt::from(2)) / BigInt::from(3) * BigInt::from(4)))
+        },
+    },
+    Calc {
+        name: "RAID usable capacity", symbol: "RAID", keywords: "raid 0 1 5 6 10 usable capacity disks storage nas zfs raidz linux", group: DEV,
+        inputs: &[n("Number of disks", "4"), n("Disk size (TB)", "8"), n("RAID level (0, 1, 5, 6, 10)", "5")], result: "Usable", suffix: " TB", out: Kind::Linear,
+        formula: "0: n·s · 1: s · 5: (n−1)·s · 6: (n−2)·s · 10: n·s ÷ 2",
+        compute: |v| {
+            let disks = whole(&v[0], 10_000, "Use a whole number of disks")?;
+            let level = whole(&v[2], 10, "RAID level is 0, 1, 5, 6 or 10")?;
+            let (min, data) = match level {
+                0 => (1, disks),
+                1 => (2, 1),
+                5 => (3, disks - 1),
+                6 => (4, disks - 2),
+                10 => (4, disks / 2),
+                _ => return Err("RAID level is 0, 1, 5, 6 or 10"),
+            };
+            if disks < min {
+                return Err("Not enough disks for that level");
+            }
+            Ok(int(data) * &v[1])
+        },
+    },
+    Calc {
+        name: "Disk throughput from IOPS", symbol: "IOPS", keywords: "iops throughput disk ssd block size mb/s storage fio", group: DEV,
+        inputs: &[n("IOPS", "10000"), n("Block size (KiB)", "4")], result: "Throughput", suffix: " MB/s", out: Kind::Linear,
+        formula: "IOPS × KiB × 1024 ÷ 1,000,000",
+        compute: |v| Ok(&v[0] * &v[1] * int(1024) / int(1_000_000)),
+    },
+    Calc {
+        name: "Signal from exit code", symbol: "128+n", keywords: "exit code status signal 137 sigkill 139 sigsegv 143 sigterm oom killed linux shell", group: DEV,
+        inputs: &[n("Exit code", "137")], result: "Signal number (9 = KILL, 15 = TERM, 11 = SEGV)", suffix: "", out: Kind::Linear,
+        formula: "exit code − 128 (codes above 128 mean the process was killed by a signal)",
+        compute: |v| {
+            let code = whole(&v[0], 255, "Exit codes are 0 to 255")?;
+            if code <= 128 {
+                return Err("Codes up to 128 are normal exits, not signals");
+            }
+            Ok(int(code - 128))
+        },
+    },
+    // ── Gaming & displays ──
+    Calc {
+        name: "Mouse distance per 360°", symbol: "cm/360", keywords: "cm/360 mouse sensitivity dpi yaw 360 turn fps gaming aim", group: GAME,
+        inputs: &[n("Mouse DPI", "800"), n("In-game sensitivity", "1.5"), n("Degrees per count (yaw, often 0.022)", "0.022")], result: "Distance for a full turn", suffix: " cm", out: Kind::Linear,
+        formula: "360 ÷ (DPI × sensitivity × yaw) × 2.54",
+        compute: |v| {
+            let d = &v[0] * &v[1] * &v[2];
+            positive(&d, "All values must be above zero")?;
+            Ok(int(360) / d * int(254) / int(100))
+        },
+    },
+    Calc {
+        name: "Sensitivity between games", symbol: "sens", keywords: "sensitivity converter games yaw fps gaming mouse aim", group: GAME,
+        inputs: &[n("Sensitivity in game A", "1.5"), n("Yaw of game A (°/count)", "0.022"), n("Yaw of game B (°/count)", "0.07")], result: "Sensitivity in game B", suffix: "", out: Kind::Linear,
+        formula: "sensitivity × yaw A ÷ yaw B  (same cm/360)",
+        compute: |v| positive(&v[2], "Yaw must be above zero").map(|_| &v[0] * &v[1] / &v[2]),
+    },
+    Calc {
+        name: "Sensitivity after DPI change", symbol: "sens DPI", keywords: "sensitivity dpi change new mouse keep same feel gaming", group: GAME,
+        inputs: &[n("Current sensitivity", "2"), n("Old DPI", "400"), n("New DPI", "1600")], result: "New sensitivity", suffix: "", out: Kind::Linear,
+        formula: "sensitivity × old DPI ÷ new DPI",
+        compute: |v| positive(&v[2], "DPI must be above zero").map(|_| &v[0] * &v[1] / &v[2]),
+    },
+    Calc {
+        name: "eDPI", symbol: "eDPI", keywords: "edpi effective dpi sensitivity mouse gaming", group: GAME,
+        inputs: &[n("Mouse DPI", "800"), n("In-game sensitivity", "0.4")], result: "eDPI", suffix: "", out: Kind::Linear,
+        formula: "DPI × sensitivity",
+        compute: |v| Ok(&v[0] * &v[1]),
+    },
+    Calc {
+        name: "Horizontal FOV from vertical", symbol: "hFOV", keywords: "fov field of view horizontal vertical aspect ratio game ultrawide", group: GAME,
+        inputs: &[n("Vertical FOV (°)", "59"), n("Aspect ratio (w/h)", "16/9")], result: "Horizontal FOV", suffix: "°", out: Kind::Linear,
+        formula: "2 × atan(tan(vFOV ÷ 2) × aspect)",
+        compute: |v| from_fl(2.0 * ((deg(&v[0])? / 2.0).tan() * fl(&v[1])?).atan().to_degrees()),
+    },
+    Calc {
+        name: "Vertical FOV from horizontal", symbol: "vFOV", keywords: "fov field of view horizontal vertical aspect ratio game", group: GAME,
+        inputs: &[n("Horizontal FOV (°)", "90"), n("Aspect ratio (w/h)", "16/9")], result: "Vertical FOV", suffix: "°", out: Kind::Linear,
+        formula: "2 × atan(tan(hFOV ÷ 2) ÷ aspect)",
+        compute: |v| {
+            positive(&v[1], "Aspect ratio must be above zero")?;
+            from_fl(2.0 * ((deg(&v[0])? / 2.0).tan() / fl(&v[1])?).atan().to_degrees())
+        },
+    },
+    Calc {
+        name: "FOV for another aspect ratio", symbol: "FOV a→b", keywords: "fov aspect ratio 4:3 16:9 21:9 ultrawide hor+ field of view game", group: GAME,
+        inputs: &[n("Horizontal FOV (°)", "90"), n("At aspect ratio", "4/3"), n("New aspect ratio", "16/9")], result: "Same view at new ratio", suffix: "°", out: Kind::Linear,
+        formula: "2 × atan(tan(FOV ÷ 2) × new ÷ old)",
+        compute: |v| {
+            positive(&v[1], "Aspect ratio must be above zero")?;
+            from_fl(2.0 * ((deg(&v[0])? / 2.0).tan() * fl(&(&v[2] / &v[1]))?).atan().to_degrees())
+        },
+    },
+    Calc {
+        name: "Screen pixel density (PPI)", symbol: "PPI", keywords: "ppi pixel density dpi screen monitor phone resolution diagonal inch display", group: GAME,
+        inputs: &[n("Width (px)", "2560"), n("Height (px)", "1440"), n("Diagonal (inches)", "27")], result: "Pixel density", suffix: " PPI", out: Kind::Linear,
+        formula: "√(width² + height²) ÷ diagonal",
+        compute: |v| {
+            positive(&v[2], "Diagonal must be above zero")?;
+            from_fl(fl(&v[0])?.hypot(fl(&v[1])?) / fl(&v[2])?)
+        },
+    },
+    Calc {
+        name: "Screen width from diagonal", symbol: "W screen", keywords: "screen monitor tv width height size diagonal aspect ratio inch desk display", group: GAME,
+        inputs: &[n("Diagonal (inches)", "27"), n("Aspect ratio (w/h)", "16/9")], result: "Width", suffix: " cm", out: Kind::Linear,
+        formula: "diagonal × aspect ÷ √(aspect² + 1) × 2.54",
+        compute: |v| {
+            let a = fl(&v[1])?;
+            from_fl(fl(&v[0])? * a / (a * a + 1.0).sqrt() * 2.54)
+        },
+    },
+    Calc {
+        name: "Video signal bandwidth", symbol: "Gbit/s", keywords: "hdmi displayport cable bandwidth resolution refresh rate bit depth monitor video signal 4k 144hz", group: GAME,
+        inputs: &[n("Width (px)", "3840"), n("Height (px)", "2160"), n("Refresh rate (Hz)", "144"), n("Bits per pixel (24 = 8-bit, 30 = 10-bit)", "30")], result: "Raw pixel data", suffix: " Gbit/s", out: Kind::Linear,
+        formula: "width × height × Hz × bits  (cables also need ~5–20% for blanking)",
+        compute: |v| Ok(&v[0] * &v[1] * &v[2] * &v[3] / int(1_000_000_000)),
+    },
+    Calc {
+        name: "Texture memory", symbol: "VRAM", keywords: "texture memory vram size gpu mipmaps rgba game graphics", group: GAME,
+        inputs: &[n("Width (px)", "4096"), n("Height (px)", "4096"), n("Bytes per pixel (RGBA8 = 4)", "4"), n("Mipmaps (1 = yes, 0 = no)", "1")], result: "Memory", suffix: " MiB", out: Kind::Linear,
+        formula: "width × height × bytes (× 4⁄3 with mipmaps)",
+        compute: |v| {
+            let base = &v[0] * &v[1] * &v[2] / int(1 << 20);
+            Ok(if v[3].is_zero() { base } else { base * int(4) / int(3) })
+        },
+    },
+    Calc {
+        name: "Render resolution from upscaling", symbol: "render px", keywords: "dlss fsr xess upscaling render resolution scale internal quality balanced performance game", group: GAME,
+        inputs: &[n("Output width or height (px)", "2160"), n("Render scale (%: quality 66.7, balanced 58, performance 50)", "66.7")], result: "Rendered at", suffix: " px", out: Kind::Linear,
+        formula: "size × scale (use it once for the width and once for the height)",
+        compute: |v| Ok((&v[0] * pct(&v[1])).round()),
+    },
+    Calc {
+        name: "Chance of a drop in N tries", symbol: "drop %", keywords: "drop chance probability loot gacha rng tries at least once game", group: GAME,
+        inputs: &[n("Chance per try (%)", "1"), n("Tries", "100")], result: "Chance of at least one", suffix: "%", out: Kind::Linear,
+        formula: "1 − (1 − p)^tries",
+        compute: |v| {
+            let p = share(&v[0], "Chance is between 0 and 100%")?;
+            from_fl((1.0 - (1.0 - p).powf(fl(&v[1])?)) * 100.0)
+        },
+    },
+    Calc {
+        name: "Tries needed for a drop", symbol: "tries", keywords: "drop chance probability loot gacha rng tries needed pity game", group: GAME,
+        inputs: &[n("Chance per try (%)", "1"), n("Wanted certainty (%)", "90")], result: "Tries", suffix: "", out: Kind::Linear,
+        formula: "⌈ln(1 − wanted) ÷ ln(1 − p)⌉",
+        compute: |v| {
+            let p = share(&v[0], "Chance is between 0 and 100%")?;
+            let want = share(&v[1], "Certainty is between 0 and 100%")?;
+            if p <= 0.0 || want >= 1.0 {
+                return Err("Chance must be above 0% and certainty below 100%");
+            }
+            if p >= 1.0 {
+                return Ok(R::one());
+            }
+            from_fl(((1.0 - want).ln() / (1.0 - p).ln()).ceil())
+        },
+    },
+    Calc {
+        name: "Elo win chance", symbol: "Elo", keywords: "elo rating win probability expected score chess mmr ranked game", group: GAME,
+        inputs: &[n("Your rating", "1600"), n("Opponent rating", "1500")], result: "Expected score", suffix: "%", out: Kind::Linear,
+        formula: "1 ÷ (1 + 10^((opponent − you) ÷ 400))",
+        compute: |v| from_fl(100.0 / (1.0 + 10f64.powf(fl(&(&v[1] - &v[0]))? / 400.0))),
+    },
+    Calc {
+        name: "Damage per second", symbol: "DPS", keywords: "dps damage per second fire rate rpm weapon game", group: GAME,
+        inputs: &[n("Damage per hit", "30"), n("Fire rate (per minute)", "600")], result: "DPS", suffix: "", out: Kind::Linear,
+        formula: "damage × rate ÷ 60",
+        compute: |v| Ok(&v[0] * &v[1] / int(60)),
+    },
+    Calc {
+        name: "Nether coordinates", symbol: "÷8", keywords: "minecraft nether overworld coordinates portal travel block game", group: GAME,
+        inputs: &[n("Overworld X or Z", "800")], result: "Nether X or Z", suffix: "", out: Kind::Linear,
+        formula: "overworld ÷ 8 (multiply by 8 to go back)",
+        compute: |v| Ok(&v[0] / int(8)),
+    },
+    // ── Home & DIY ──
+    Calc {
+        name: "Paint needed", symbol: "paint", keywords: "paint needed liters wall area coats coverage decorating home diy", group: HOME,
+        inputs: &[n("Wall area (m²)", "40"), n("Coats", "2"), n("Coverage (m² per liter)", "10")], result: "Paint", suffix: " L", out: Kind::Linear,
+        formula: "area × coats ÷ coverage",
+        compute: |v| positive(&v[2], "Coverage must be above zero").map(|_| &v[0] * &v[1] / &v[2]),
+    },
+    Calc {
+        name: "Tiles needed", symbol: "tiles", keywords: "tiles flooring laminate needed count area waste bathroom home diy", group: HOME,
+        inputs: &[n("Area (m²)", "10"), n("Tile width (cm)", "30"), n("Tile length (cm)", "60"), n("Extra for cuts (%)", "10")], result: "Tiles", suffix: "", out: Kind::Linear,
+        formula: "⌈area × (1 + extra) ÷ tile area⌉",
+        compute: |v| {
+            let tile = &v[1] * &v[2] / int(10_000);
+            positive(&tile, "Tile size must be above zero")?;
+            Ok((&v[0] * (R::one() + pct(&v[3])) / tile).ceil())
+        },
+    },
+    Calc {
+        name: "Concrete volume", symbol: "m³", keywords: "concrete slab volume cubic meters length width depth footing home diy", group: HOME,
+        inputs: &[n("Length (m)", "3"), n("Width (m)", "3"), n("Depth (cm)", "10")], result: "Volume", suffix: " m³", out: Kind::Linear,
+        formula: "length × width × depth",
+        compute: |v| Ok(&v[0] * &v[1] * &v[2] / int(100)),
+    },
+    Calc {
+        name: "Scale a recipe", symbol: "servings", keywords: "recipe scale servings portions ingredients cooking baking", group: HOME,
+        inputs: &[n("Amount in recipe", "250"), n("Recipe serves", "4"), n("You want to serve", "6")], result: "Amount", suffix: "", out: Kind::Linear,
+        formula: "amount × wanted ÷ original",
+        compute: |v| nonzero(&v[1], "Servings can't be zero").map(|_| &v[0] * &v[2] / &v[1]),
+    },
+    Calc {
+        name: "Sale price", symbol: "sale", keywords: "sale discount price off coupon percent extra stacked shopping", group: DAY,
+        inputs: &[n("Price", "80"), n("Discount (%)", "25"), n("Extra discount (%)", "0")], result: "You pay", suffix: "", out: Kind::Currency,
+        formula: "price × (1 − d₁) × (1 − d₂)",
+        compute: |v| Ok(&v[0] * (R::one() - pct(&v[1])) * (R::one() - pct(&v[2]))),
+    },
+    Calc {
+        name: "Travel time", symbol: "km÷km/h", keywords: "travel time trip duration distance speed drive arrive", group: DAY,
+        inputs: &[n("Distance (km)", "300"), n("Average speed (km/h)", "90")], result: "Time", suffix: "", out: Kind::Duration(DurFmt::Clock),
+        formula: "distance ÷ speed",
+        compute: |v| positive(&v[1], "Speed must be above zero").map(|_| &v[0] / &v[1] * int(3600)),
+    },
+    Calc {
+        name: "Average speed", symbol: "avg km/h", keywords: "average speed distance time trip km/h", group: DAY,
+        inputs: &[n("Distance (km)", "42.195"), n("Time (minutes)", "180")], result: "Speed", suffix: " km/h", out: Kind::Linear,
+        formula: "distance ÷ hours",
+        compute: |v| positive(&v[1], "Time must be above zero").map(|_| &v[0] * int(60) / &v[1]),
+    },
+    Calc {
+        name: "Running pace", symbol: "pace", keywords: "running pace min/km per kilometer marathon 5k 10k jogging time distance", group: DAY,
+        inputs: &[n("Distance (km)", "10"), n("Time (minutes)", "55")], result: "Pace per km", suffix: "", out: Kind::Duration(DurFmt::Clock),
+        formula: "time ÷ distance",
+        compute: |v| positive(&v[0], "Distance must be above zero").map(|_| &v[1] * int(60) / &v[0]),
+    },
+    // ── More health ──
+    Calc {
+        name: "Waist-to-height ratio", symbol: "WHtR", keywords: "waist to height ratio whtr health weight belly", group: HEALTH,
+        inputs: &[n("Waist (cm)", "80"), n("Height (cm)", "175")], result: "Ratio", suffix: "", out: Kind::Linear,
+        formula: "waist ÷ height  (under 0.5 is the usual healthy range)",
+        compute: |v| positive(&v[1], "Height must be above zero").map(|_| &v[0] / &v[1]),
+    },
+    Calc {
+        name: "Heart rate training zone", symbol: "HR zone", keywords: "heart rate zone karvonen training cardio target bpm fitness", group: HEALTH,
+        inputs: &[n("Age", "30"), n("Resting heart rate", "60"), n("Intensity (%)", "70")], result: "Target", suffix: " bpm", out: Kind::Linear,
+        formula: "Karvonen: (220 − age − rest) × intensity + rest",
+        compute: |v| Ok(((int(220) - &v[0] - &v[1]) * pct(&v[2]) + &v[1]).round()),
+    },
+    Calc {
+        name: "Calories burned (MET)", symbol: "MET kcal", keywords: "calories burned exercise met activity workout walking running cycling fitness", group: HEALTH,
+        inputs: &[n("MET (walk 3.5, run 9.8, cycle 7.5)", "3.5"), n("Weight (kg)", "70"), n("Minutes", "30")], result: "Calories", suffix: " kcal", out: Kind::Linear,
+        formula: "MET × kg × hours",
+        compute: |v| Ok(&v[0] * &v[1] * &v[2] / int(60)),
+    },
+    Calc {
+        name: "Body surface area", symbol: "BSA", keywords: "body surface area bsa mosteller medicine dose health", group: HEALTH,
+        inputs: &[n("Height (cm)", "175"), n("Weight (kg)", "70")], result: "Surface area", suffix: " m²", out: Kind::Linear,
+        formula: "Mosteller: √(cm × kg ÷ 3600)",
+        compute: |v| {
+            let x = fl(&(&v[0] * &v[1]))?;
+            if x < 0.0 {
+                return Err("Use positive values");
+            }
+            from_fl((x / 3600.0).sqrt())
+        },
+    },
 ];
 
 pub fn register(b: &mut Builder) {
@@ -878,6 +1914,40 @@ mod tests {
         assert_eq!(run("Dilution (C₁V₁ = C₂V₂)", &["2", "50", "0.5"]), "200");
         assert_eq!(run("Ideal gas pressure", &["1", "273.15", "22.414"]), "101.3248623");
         assert_eq!(run("Battery runtime", &["3000", "250"]), "12:00:00");
+    }
+
+    #[test]
+    fn new_calculators() {
+        assert_eq!(run("Resistors in series", &["1000", "2200", "0", "0"]), "3200");
+        assert_eq!(run("Capacitors in series", &["10", "10"]), "5");
+        assert_eq!(run("Nearest standard resistor value", &["5000", "12"]), "4700");
+        assert_eq!(run("LM317 output voltage", &["240", "720"]), "5");
+        assert_eq!(run("555 timer duty cycle (astable)", &["1000", "1000"]), "66.66666667");
+        assert_eq!(run_sig("PCB trace width", &["1", "10", "1"], 3), "0.3");
+        assert_eq!(run("Kinetic energy", &["2", "3"]), "9");
+        assert_eq!(run_sig("Escape velocity", &["5.972e24", "6.371e6"], 4), "11190");
+        assert_eq!(run("Remove VAT / sales tax", &["120", "20"]), "100.00");
+        assert_eq!(run("Break-even point", &["10000", "50", "30"]), "500");
+        assert_eq!(run_sig("Compound annual growth rate (CAGR)", &["1000", "2000", "1"], 4), "100");
+        assert_eq!(run("Savings with monthly deposits", &["100", "0", "1", "50"]), "1250.00");
+        assert_eq!(run("Allowed downtime (SLA)", &["99.9", "365"]), "8:45:36");
+        assert_eq!(run("Usable IPv4 hosts in a subnet", &["24"]), "254");
+        assert_eq!(run("Usable IPv4 hosts in a subnet", &["32"]), "1");
+        assert_eq!(run("Bits needed for N values", &["256"]), "8");
+        assert_eq!(run("Bits needed for N values", &["257"]), "9");
+        assert_eq!(run("Base64 encoded size", &["10"]), "16");
+        assert_eq!(run("RAID usable capacity", &["4", "8", "6"]), "16");
+        assert_eq!(run("Signal from exit code", &["137"]), "9");
+        assert_eq!(run_sig("Mouse distance per 360°", &["800", "1.5", "0.022"], 4), "34.64");
+        assert_eq!(run("Sensitivity between games", &["1.5", "0.022", "0.066"]), "0.5");
+        assert_eq!(run_sig("FOV for another aspect ratio", &["90", "4/3", "16/9"], 5), "106.26");
+        assert_eq!(run_sig("Chance of a drop in N tries", &["1", "100"], 4), "63.4");
+        assert_eq!(run("Tries needed for a drop", &["1", "90"]), "230");
+        assert_eq!(run("Elo win chance", &["1500", "1500"]), "50");
+        assert_eq!(run("Tiles needed", &["10", "30", "60", "10"]), "62");
+        assert_eq!(run("Running pace", &["10", "55"]), "0:05:30");
+        assert_eq!(run("Fibonacci number", &["10"]), "55");
+        assert_eq!(run("Weekly pay with overtime", &["20", "45", "40", "1.5"]), "950.00");
     }
 
     #[test]

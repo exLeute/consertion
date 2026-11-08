@@ -32,6 +32,7 @@ pub fn parse_quantity(kind: Kind, input: &str) -> Result<Option<R>, String> {
         Kind::Size(t, c) => sizes::parse(t, c, input),
         Kind::Note => music::parse_note(input),
         Kind::Interval => music::parse_interval(input),
+        Kind::Code(f) => f.parse(input),
         _ => number(input),
     }
 }
@@ -44,6 +45,7 @@ fn words(kind: Kind, q: &R) -> Option<Result<String, String>> {
         Kind::Size(t, c) => sizes::format(t, c, q),
         Kind::Note => music::format_note(q),
         Kind::Interval => music::format_interval(q),
+        Kind::Code(f) => f.format(q),
         _ => return None,
     })
 }

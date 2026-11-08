@@ -89,6 +89,7 @@ fn convert(args: &[String]) -> Result<String, String> {
         (None, 3) => (args[0].clone(), args[1].clone(), Some(args[2].clone())),
         _ => return Err("too many words — quote names with spaces, or put \"to\" before the target".into()),
     };
+    let value = engineering(&value).unwrap_or(value);
     if to.as_deref().is_some_and(|t| t.trim().is_empty()) {
         return Err("nothing after \"to\"".into());
     }
@@ -139,6 +140,33 @@ fn is_named(u: &catalog::Unit, s: &str) -> bool {
         || u.symbol.strip_prefix('°').is_some_and(|x| x.eq_ignore_ascii_case(s))
         || u.name.eq_ignore_ascii_case(s)
         || u.name.eq_ignore_ascii_case(&format!("{s} time"))
+}
+
+/// Values written the electronics way: "4.7k" → "4.7e3", "100n" → "100e-9", "4k7" → "4.7e3".
+/// Only used when the unit is a separate word, so "5m" alone still means 5 meters.
+fn engineering(v: &str) -> Option<String> {
+    let i = v.find(|c: char| !(c.is_ascii_digit() || ".-+".contains(c)))?;
+    let (num, rest) = v.split_at(i);
+    let mut chars = rest.chars();
+    let exp = match chars.next()? {
+        'G' => 9,
+        'M' => 6,
+        'k' | 'K' => 3,
+        'm' => -3,
+        'u' | 'µ' => -6,
+        'n' => -9,
+        'p' => -12,
+        'R' | 'r' => 0,
+        _ => return None,
+    };
+    let tail = chars.as_str();
+    let ok = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit());
+    let num = match tail {
+        "" if num.chars().any(|c| c.is_ascii_digit()) && exp != 0 => num.to_string(),
+        t if ok(num) && ok(t) => format!("{num}.{t}"),
+        _ => return None,
+    };
+    Some(format!("{num}e{exp}"))
 }
 
 /// "5mi" → ("5", "mi") when the tail is a unit.
@@ -415,4 +443,20 @@ Register-ArgumentCompleter -Native -CommandName consertion -ScriptBlock {
         .into(),
         other => return Err(format!("no completion for \"{other}\" — use bash, zsh, fish or powershell")),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::engineering;
+
+    #[test]
+    fn engineering_values() {
+        assert_eq!(engineering("4.7k").as_deref(), Some("4.7e3"));
+        assert_eq!(engineering("4k7").as_deref(), Some("4.7e3"));
+        assert_eq!(engineering("100n").as_deref(), Some("100e-9"));
+        assert_eq!(engineering("4R7").as_deref(), Some("4.7e0"));
+        assert_eq!(engineering("12"), None);
+        assert_eq!(engineering("15:00"), None);
+        assert_eq!(engineering("C#5"), None);
+    }
 }

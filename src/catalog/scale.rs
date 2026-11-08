@@ -26,6 +26,24 @@ pub enum Scale {
     Stops,
     /// Optical density of a filter, base light factor (0.9 = ×8).
     OpticalDensity,
+    /// Voltage levels, base volt: dBV (re 1 V), dBu (re 0.775 V), dBmV, dBµV.
+    Dbv,
+    Dbu,
+    DbmV,
+    DbuV,
+}
+
+impl Scale {
+    /// Reference voltage of the dB voltage scales.
+    fn volt_ref(self) -> Option<f64> {
+        match self {
+            Scale::Dbv => Some(1.0),
+            Scale::Dbu => Some(0.6f64.sqrt()),
+            Scale::DbmV => Some(1e-3),
+            Scale::DbuV => Some(1e-6),
+            _ => None,
+        }
+    }
 }
 
 impl Scale {
@@ -42,6 +60,7 @@ impl Scale {
             Scale::FreqRatio => 1200.0 * v.log2(),
             Scale::Stops => 2f64.powf(v),
             Scale::OpticalDensity => 10f64.powf(v),
+            Scale::Dbv | Scale::Dbu | Scale::DbmV | Scale::DbuV => self.volt_ref().unwrap_or(1.0) * 10f64.powf(v / 20.0),
         }
     }
 
@@ -65,6 +84,7 @@ impl Scale {
             Scale::Midi => super::music::midi_of(b),
             Scale::Stops => b.log2(),
             Scale::OpticalDensity => b.log10(),
+            Scale::Dbv | Scale::Dbu | Scale::DbmV | Scale::DbuV => 20.0 * (b / self.volt_ref().unwrap_or(1.0)).log10(),
             Scale::Beaufort | Scale::FreqRatio => unreachable!(),
         })
     }
@@ -86,8 +106,10 @@ mod tests {
         assert!((Scale::Beaufort.base_to_unit(10.8).unwrap() - 5.5).abs() < 0.05);
         assert!(close(Scale::Midi.to_base(69.0), 440.0));
         assert!(close(Scale::FreqRatio.base_to_unit(1200.0).unwrap(), 2.0));
+        assert!((Scale::Dbu.to_base(4.0) - 1.2276).abs() < 1e-4);
+        assert!(close(Scale::DbuV.base_to_unit(1.0).unwrap(), 120.0));
         assert!(close(Scale::Stops.to_base(3.0), Scale::OpticalDensity.to_base(0.9030899869919435)));
-        for s in [Scale::Dbm, Scale::Dbw, Scale::DbPower, Scale::DbAmplitude, Scale::Ph, Scale::Awg, Scale::Beaufort, Scale::DbSpl, Scale::Midi, Scale::FreqRatio, Scale::Stops, Scale::OpticalDensity] {
+        for s in [Scale::Dbm, Scale::Dbw, Scale::DbPower, Scale::DbAmplitude, Scale::Ph, Scale::Awg, Scale::Beaufort, Scale::DbSpl, Scale::Midi, Scale::FreqRatio, Scale::Stops, Scale::OpticalDensity, Scale::Dbv, Scale::Dbu, Scale::DbmV, Scale::DbuV] {
             assert!(close(s.base_to_unit(s.to_base(3.5)).unwrap(), 3.5));
         }
     }

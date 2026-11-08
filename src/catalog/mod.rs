@@ -15,9 +15,11 @@ mod hash;
 pub mod lang;
 pub mod music;
 pub mod numbers;
+pub mod parts;
 pub mod physical;
 pub mod scale;
 pub mod sizes;
+pub mod tech;
 pub mod text;
 pub mod time;
 pub mod zones;
@@ -67,6 +69,8 @@ pub enum Kind {
     /// An interval name ("perfect fifth"); base cents.
     Interval,
     Coord(coords::CoordFmt),
+    /// A marking on a part ("104", "4R7", color bands); base farad or ohm.
+    Code(parts::CodeFmt),
     /// "New custom converter…": opens the form instead of converting.
     NewCustom,
 }
@@ -79,7 +83,7 @@ impl Kind {
 
     /// Has a value relative to its category's base unit (numbers, dates, durations).
     pub fn is_quantity(&self) -> bool {
-        self.is_numeric() || matches!(self, Kind::Date(_) | Kind::Duration(_) | Kind::Zone(_) | Kind::Size(..) | Kind::Note | Kind::Interval)
+        self.is_numeric() || matches!(self, Kind::Date(_) | Kind::Duration(_) | Kind::Zone(_) | Kind::Size(..) | Kind::Note | Kind::Interval | Kind::Code(_))
     }
 
     /// Shown with digit grouping ("1,234.5").
@@ -121,6 +125,7 @@ impl Kind {
             Kind::Note => music::accepts_note(s),
             Kind::Interval => music::accepts_interval(s),
             Kind::Coord(_) => coords::accepts(s),
+            Kind::Code(_) => parts::accepts(s),
             _ => false,
         }
     }
@@ -140,6 +145,7 @@ impl Kind {
             Kind::Note => "e.g. A4, C#5, Bb3 or A4 +20¢",
             Kind::Interval => "e.g. P5, minor third, tritone or octave",
             Kind::Coord(f) => f.placeholder(),
+            Kind::Code(f) => f.placeholder(),
             _ if !self.can_parse() => "output only",
             _ => "",
         }
@@ -182,23 +188,30 @@ const GROUPS: &[(&str, &[&str])] = &[
     ("", &["custom"]),
     ("Everyday", &[
         "length", "mass", "temperature", "volume", "currency", "timezone", "area", "time", "datetime", "speed",
-        "cooking", "ratio", "percent", "everyday", "fuel", "coords",
+        "cooking", "ratio", "percent", "everyday", "homecalc", "fuel", "coords", "typing",
     ]),
-    ("Sizes", &["shoe", "ring", "womens", "menssuit", "mensshirt", "bra", "paper"]),
+    ("Business & Finance", &["bizcalc"]),
+    ("Sizes", &["shoe", "ring", "womens", "menssuit", "mensshirt", "bra", "paper", "areal", "lineardensity"]),
     ("Health", &["healthcalc", "glucose", "hba1c"]),
     ("Files, Text & Data", &["files", "translate", "data", "datarate", "text", "numbers", "color", "css", "perms"]),
+    ("Programming & Servers", &["devcalc", "eventrate"]),
+    ("Gaming & Displays", &["gamecalc", "framerate", "mouse"]),
     ("Music & Audio", &["pitch", "tempo", "interval", "frames", "musiccalc"]),
     ("Photography", &["photocalc", "stops"]),
     ("Math", &["mathcalc", "angle", "solidangle"]),
     ("Physics", &[
-        "energy", "power", "pressure", "force", "acceleration", "frequency", "torque", "density", "flow",
-        "spectrum", "specenergy", "viscosity", "kinvisc",
+        "physcalc", "energy", "power", "pressure", "force", "acceleration", "frequency", "torque", "density", "flow",
+        "momentum", "massflow", "stiffness", "inertia", "tempdiff", "specheat", "thermcond", "spectrum", "specenergy",
+        "viscosity", "kinvisc", "tension",
     ]),
     ("Electricity & Magnetism", &[
         "eleccalc", "voltage", "current", "resistance", "charge", "capacitance", "inductance", "conductance",
-        "magfield", "magflux",
+        "magfield", "magflux", "resistivity", "conductivity", "efield", "magh",
     ]),
-    ("Light & Radiation", &["illuminance", "lumflux", "luminous", "radioactivity", "absorbed", "equivalent"]),
+    ("Light & Radiation", &[
+        "illuminance", "luminance", "colortemp", "irradiance", "lumflux", "luminous", "doserate", "radioactivity", "absorbed", "equivalent",
+        "exposure",
+    ]),
     ("Chemistry", &["chemistry", "chemcalc", "molarity", "substance", "catalytic"]),
 ];
 
@@ -228,6 +241,7 @@ impl Catalog {
         sizes::register(&mut b);
         coords::register(&mut b);
         music::register(&mut b);
+        tech::register(&mut b);
         lang::register(&mut b);
         numbers::register(&mut b);
         color::register(&mut b);
@@ -374,6 +388,9 @@ pub fn expr(s: &str) -> R {
     num::eval(s, &constant).unwrap_or_else(|e| panic!("bad catalog expression {s:?}: {e:?}"))
 }
 
+/// A table row for `Builder::linear`: (name, symbol, factor-to-base expression, keywords).
+pub type Row = (&'static str, &'static str, &'static str, &'static str);
+
 #[derive(Default)]
 pub struct Builder {
     cat: Catalog,
@@ -417,7 +434,7 @@ impl Builder {
     }
 
     /// Linear units from a table of (name, symbol, factor-to-base expression, keywords).
-    pub fn linear(&mut self, table: &[(&str, &str, &str, &str)]) {
+    pub fn linear(&mut self, table: &[Row]) {
         for &(name, sym, factor, kw) in table {
             self.unit(name, sym, Kind::Linear, expr(factor), R::zero(), kw, true);
         }

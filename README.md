@@ -75,6 +75,7 @@ consertion 100 usd eur
 consertion 1 "cup of flour" g       # 125
 consertion C#5 note Hz              # 554.365262
 consertion 34C "US bra" "EU bra"    # 75C
+consertion 4.7k ohm bands           # yellow violet red gold
 consertion find pressure            # what's available
 consertion file photo.heic photo.jpg
 consertion translate auto de "good morning"
@@ -96,15 +97,27 @@ consertion completions powershell | Out-String | Invoke-Expression   # in $PROFI
   for 100+ cities, cooking (cups and spoons of 23 ingredients ↔ grams), fuel
   economy, map coordinates (decimal, DMS, plus codes, geohash).
 - **Sizes**: shoes, rings, women's and men's clothing, bras, paper (A4 → mm,
-  inches, pixels at any dpi).
+  inches, pixels at any dpi), paper weight (gsm ↔ lb bond), yarn (denier, tex).
+- **Electronics**: voltage, current, resistance and friends, dBV/dBu/dBµV,
+  resistor color bands, SMD codes (`4R7`, `1002`), capacitor codes (`104`),
+  wire gauge, resistivity, field strength.
+- **Programming & Linux**: bytes and bitrates (also GB per month), disk sectors
+  and pages, requests per second ↔ per day, number bases, colors (hex, RGB,
+  HSL, OKLCH…), Base64, URL encoding, hashes, Unix permissions.
+- **Gaming & displays**: fps ↔ frame time, mouse DPI, typing speed (WPM),
+  screen brightness (nits).
 - **Music & photo**: note names ↔ Hz and MIDI, tempo ↔ delay times, intervals,
-  sample and frame counts, exposure stops and ND filters.
-- **Data & text**: bytes and bitrates, number bases and Roman numerals, colors
-  (hex, RGB, HSL, OKLCH…), Base64, URL encoding, hashes, Unix permissions.
-- **Science**: pressure, energy, power, force, electrical units, radiation,
-  light, chemistry (molar mass from a formula), and more.
-- **Calculators**: percentages, loans and interest, tips, BMI and calories,
-  Ohm's law, exposure and depth of field, song length, and about 80 others.
+  sample and frame counts, exposure stops and ND filters, color temperature
+  (kelvin ↔ mired).
+- **Science**: pressure, energy, power, force, momentum, heat capacity and
+  conductivity, solar irradiance, radiation dose rates, light, chemistry
+  (molar mass from a formula), and more.
+- **About 200 calculators**: percentages, VAT, loans, savings, break-even, ROI,
+  CAGR · Ohm's law, 555 timers, op-amps, RC filters, PCB trace width, cable
+  voltage drop, nearest E12/E24 value · SLA downtime, subnets, Little's law,
+  hash collisions, RAID capacity · mouse cm/360, sensitivity between games, FOV
+  for any aspect ratio, PPI, drop chances · kinetic energy, free fall, half-life
+  · BMI, calories, heart rate zones · paint, tiles, recipe scaling, and more.
 - **Files**: images are built in (PNG, JPEG, WebP, GIF, BMP, TIFF, ICO…), and so
   are JSON / YAML / TOML / CSV, text encodings, Markdown → HTML and subtitles.
   Audio, video and documents work when [ffmpeg](https://ffmpeg.org),
